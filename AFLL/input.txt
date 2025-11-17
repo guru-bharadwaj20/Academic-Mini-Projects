@@ -1,0 +1,20 @@
+for(i=0; i<3; i=i+1) {
+    a=a+1;
+}
+
+while(i<5){
+    a=a+1
+}
+
+int array[];
+
+int Sum(int a, int b){
+    return a+b;
+}
+
+if(x>1){
+    a=2;
+}
+else{
+    a=3;
+}
