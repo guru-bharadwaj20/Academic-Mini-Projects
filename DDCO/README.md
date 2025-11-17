@@ -22,7 +22,7 @@ The operation executes sequentially over **4 clock cycles** based on the multipl
 ## 🧩 Block Diagram
 
 <p align="center">
-	<img src="" alt="Circuit Diagram" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
+	<img src="https://github.com/guru-bharadwaj20/Sem-3-Mini-Projects/blob/main/DDCO/Circuit%20Diagram.jpg" alt="Circuit Diagram" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
 </p>
 
 ---
@@ -57,7 +57,7 @@ The operation executes sequentially over **4 clock cycles** based on the multipl
 The console output clearly shows clock cycles and intermediate values during multiplication.
 
 <p align="center">
-	<img src="" alt="SImulation Output" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
+	<img src="https://github.com/guru-bharadwaj20/Sem-3-Mini-Projects/blob/main/DDCO/Code%20Output.png" alt="SImulation Output" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
 </p>
 
 ---
@@ -74,7 +74,7 @@ The VCD waveform shows:
 - Done signal assertion
 
 <p align="center">
-	<img src="" alt="GTKWave Waveform" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
+	<img src="https://github.com/guru-bharadwaj20/Sem-3-Mini-Projects/blob/main/DDCO/GTKWave%20Screenshot.png" alt="GTKWave Waveform" style="max-width:100%;border-radius:8px;box-shadow:0 8px 24px rgba(11,61,145,0.12)" />
 </p>
 
 ---
