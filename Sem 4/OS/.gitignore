@@ -1,0 +1,35 @@
+# Compiled binaries
+pes
+test_objects
+test_tree
+pes.exe
+test_objects.exe
+test_tree.exe
+
+# Object files
+*.o
+*.obj
+*.out
+*.obsidian
+
+# PES repository (created during testing)
+.pes/
+
+# Temporary files and logs
+*.log
+*.tmp
+
+# Shell test outputs
+test-output/
+*.gcda
+*.gcno
+*.gcov
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+
