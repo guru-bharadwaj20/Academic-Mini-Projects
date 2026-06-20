@@ -1,0 +1,301 @@
+:root {
+  --bg: #f4efe6;
+  --card: #fffdf9;
+  --ink: #1f2a3a;
+  --muted: #5e6d7f;
+  --accent: #ff6f3c;
+  --accent-deep: #d14c1f;
+  --line: #e7dccd;
+  --chip: #fff2e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #f8f2e8 0%, #f1e7d6 100%);
+  color: var(--ink);
+  min-height: 100vh;
+  position: relative;
+}
+
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.bg-orb-a {
+  width: 300px;
+  height: 300px;
+  top: -60px;
+  right: 4vw;
+  background: #ff9f7a;
+}
+
+.bg-orb-b {
+  width: 260px;
+  height: 260px;
+  bottom: -100px;
+  left: 2vw;
+  background: #ffcb8a;
+}
+
+.app {
+  max-width: 1080px;
+  margin: 32px auto;
+  padding: 0 16px 40px;
+  display: grid;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(31, 42, 58, 0.09);
+}
+
+.hero {
+  background: linear-gradient(130deg, #fffdf9 0%, #ffeedc 100%);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+
+h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.1;
+}
+
+h2 {
+  margin: 6px 0 12px;
+  font-size: clamp(20px, 2.2vw, 28px);
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+p {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+code,
+.mono {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+}
+
+.task-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  position: sticky;
+  top: 10px;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+
+.task-nav a {
+  text-decoration: none;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.task-nav a:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.two-col,
+.status-grid,
+.complexity-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.two-col,
+.status-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.complexity-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mini-panel,
+.complexity-box {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.complexity-box {
+  background: var(--chip);
+}
+
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.steps li {
+  margin-bottom: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  background: var(--accent-deep);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ghost {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.ghost:hover {
+  border-color: var(--accent);
+  background: #fff8f2;
+}
+
+.result-area {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 8px;
+}
+
+th {
+  background: #fff3e7;
+}
+
+.reveal {
+  animation: rise 0.6s ease both;
+}
+
+.delay-1 {
+  animation-delay: 0.08s;
+}
+
+.delay-2 {
+  animation-delay: 0.16s;
+}
+
+.delay-3 {
+  animation-delay: 0.24s;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .app {
+    margin-top: 20px;
+  }
+
+  .two-col,
+  .status-grid,
+  .complexity-grid,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-nav {
+    position: static;
+  }
+}
