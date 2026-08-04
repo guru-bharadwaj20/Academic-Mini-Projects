@@ -71,6 +71,14 @@ void addAssociation(SymptomChecker_t* checker, const char* symptom, const char* 
     int index = findSymptomIndex(checker, symptom);
 
     if (index == -1) {
+        /* entries[] is a fixed MAX_SYMPTOMS array. Without this check the
+           151st distinct symptom wrote past the end of the struct. */
+        if (checker->symptomCount >= MAX_SYMPTOMS) {
+            fprintf(stderr,
+                    "error: symptom table full (%d max) - dropping '%s'\n",
+                    MAX_SYMPTOMS, symptom);
+            return;
+        }
         index = checker->symptomCount++;
         strncpy(checker->entries[index].name, symptom, MAX_NAME_LENGTH - 1);
         checker->entries[index].name[MAX_NAME_LENGTH - 1] = '\0';
@@ -111,6 +119,15 @@ Suggestion_t* checkSymptoms(SymptomChecker_t* checker, const char** inputSymptom
                     }
                 }
                 if (!found) {
+                    /* tempResults holds at most maxTempResults entries;
+                       appending without checking would run off the end once
+                       the dataset carried more distinct diseases than that. */
+                    if (tempCount >= maxTempResults) {
+                        fprintf(stderr,
+                                "warning: result buffer full (%d) - some conditions omitted\n",
+                                maxTempResults);
+                        break;
+                    }
                     strncpy(tempResults[tempCount].diseaseName, current->name, MAX_NAME_LENGTH - 1);
                     tempResults[tempCount].diseaseName[MAX_NAME_LENGTH - 1] = '\0';
                     tempResults[tempCount].likelihoodScore = current->likelihoodWeight;
