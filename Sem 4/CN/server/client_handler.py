@@ -170,7 +170,20 @@ class ClientHandler:
                     msg_type = message.get("type")
                     
                     if msg_type == MessageProtocol.TYPE_CHAT:
-                        room_name = message.get("room") or self.current_room
+                        # Ignore any client-supplied "room". Honouring it let a
+                        # client post into ANY room without joining it, and the
+                        # accompanying `self.current_room = room_name` desynced
+                        # this handler from server.active_rooms: the handler
+                        # stayed registered in the OLD room's set while
+                        # current_room pointed at the new one, so cleanup()
+                        # discarded the wrong entry and dead handlers piled up
+                        # in active_rooms forever, with the server repeatedly
+                        # sending to their closed sockets.
+                        #
+                        # Room membership changes only via TYPE_ROOM_JOIN, which
+                        # goes through join_room() and updates active_rooms
+                        # under the lock.
+                        room_name = self.current_room
 
                         # NEVER trust the client's own idea of who it is.
                         # The inbound dict was previously relayed verbatim,
@@ -180,7 +193,6 @@ class ClientHandler:
                         # name it does not own.
                         message["username"] = self.username
                         message["room"] = room_name
-                        self.current_room = room_name
                         print(f"[{self.username}]: {message.get('content', '')}")
                         self.broadcast(message, exclude=None, room=room_name)
                     
