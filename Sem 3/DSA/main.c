@@ -32,6 +32,12 @@ static char** getUserInput(int* count) {
     char** symptoms = malloc(MAX_INPUT_SYMPTOMS * sizeof(char*));
     int currentCount = 0;
 
+    if (symptoms == NULL) {
+        fprintf(stderr, "error: out of memory reading symptoms\n");
+        *count = 0;
+        return NULL;
+    }
+
     printf("\n(Type 'done' or empty line to finish)\n");
 
     while (currentCount < MAX_INPUT_SYMPTOMS) {
@@ -44,6 +50,11 @@ static char** getUserInput(int* count) {
         if (strlen(buffer) == 0 || strcmp(buffer, "done") == 0) break;
 
         symptoms[currentCount] = malloc(MAX_NAME_LENGTH);
+        if (symptoms[currentCount] == NULL) {
+            fprintf(stderr, "error: out of memory - keeping the %d symptom(s) read so far\n",
+                    currentCount);
+            break;
+        }
         strncpy(symptoms[currentCount], buffer, MAX_NAME_LENGTH - 1);
         symptoms[currentCount][MAX_NAME_LENGTH - 1] = '\0';
         currentCount++;
@@ -54,6 +65,8 @@ static char** getUserInput(int* count) {
 }
 
 static void freeSymptomList(char** list, int count) {
+    /* getUserInput() now returns NULL if the array allocation failed. */
+    if (list == NULL) return;
     for (int i = 0; i < count; i++)
         free(list[i]);
     free(list);
