@@ -25,6 +25,15 @@ function toNumberArray(value) {
   return [];
 }
 
+// Bounds on the DP problem size. optimizePricing allocates two dense
+// (days+1) x (seats+1) x (priceTiers+1) tables, so an unbounded `seats` or
+// `days` let a single small JSON body exhaust the heap and kill the server
+// (e.g. {"seats": 10000000} allocated tens of millions of arrays).
+const MAX_DAYS = 60;
+const MAX_SEATS = 1000;
+const MAX_PRICE_TIERS = 12;
+const MAX_DP_CELLS = 2_000_000;
+
 function validateInput(body) {
   const days = Number(body.days);
   const seats = Number(body.seats);
@@ -37,12 +46,35 @@ function validateInput(body) {
     return { error: "'days' must be a positive integer." };
   }
 
+  if (days > MAX_DAYS) {
+    return { error: `'days' must not exceed ${MAX_DAYS}.` };
+  }
+
   if (!Number.isInteger(seats) || seats < 0) {
     return { error: "'seats' must be a non-negative integer." };
   }
 
+  if (seats > MAX_SEATS) {
+    return { error: `'seats' must not exceed ${MAX_SEATS}.` };
+  }
+
   if (!prices.length || prices.some((p) => !Number.isFinite(p) || p <= 0)) {
     return { error: "'prices' must be a non-empty array of positive numbers." };
+  }
+
+  if (prices.length > MAX_PRICE_TIERS) {
+    return { error: `'prices' must not contain more than ${MAX_PRICE_TIERS} tiers.` };
+  }
+
+  // Belt-and-braces: reject anything that would allocate an oversized table
+  // even if the individual limits above are later relaxed.
+  const cells = (days + 1) * (seats + 1) * (prices.length + 1);
+  if (cells > MAX_DP_CELLS) {
+    return {
+      error:
+        `Requested problem is too large (${cells.toLocaleString()} DP states, ` +
+        `limit ${MAX_DP_CELLS.toLocaleString()}). Reduce days, seats or price tiers.`,
+    };
   }
 
   if (baseDemandByDay.length !== days || baseDemandByDay.some((d) => !Number.isFinite(d) || d < 0)) {
