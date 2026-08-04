@@ -228,11 +228,6 @@ class ChatServer:
                 ),
             }
 
-        with self.clients_lock:
-            existing_client = self.active_users.get(username)
-            if existing_client and existing_client is not client and existing_client.running:
-                return {"ok": False, "error": f"User '{username}' is already logged in."}
-
         # `register` must be requested explicitly. Previously an unknown
         # username was created on the spot, so a typo silently made a new
         # account and anyone could farm arbitrary identities.
@@ -251,7 +246,17 @@ class ChatServer:
 
         self._clear_auth_failures(source)
 
+        # Session state is only revealed AFTER the credentials are proven.
+        # This check used to run before the password was verified, so an
+        # unauthenticated attacker could enumerate which accounts were
+        # currently online just by trying names.
+        #
+        # Check-and-claim happens under a single lock acquisition so two
+        # simultaneous logins for the same account cannot both succeed.
         with self.clients_lock:
+            existing_client = self.active_users.get(username)
+            if existing_client and existing_client is not client and existing_client.running:
+                return {"ok": False, "error": f"User '{username}' is already logged in."}
             self.active_users[username] = client
             self.active_rooms["lobby"].add(client)
 
