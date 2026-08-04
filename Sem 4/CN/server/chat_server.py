@@ -18,8 +18,9 @@ Key Networking Concepts:
 import socket
 import ssl
 import threading
-from collections import defaultdict
-from typing import Dict, List, Optional
+import time
+from collections import defaultdict, deque
+from typing import Deque, Dict, List, Optional
 from server.client_handler import ClientHandler
 from server.chat_database import ChatDatabase
 from utils.message_protocol import MessageProtocol
@@ -29,7 +30,14 @@ class ChatServer:
     """
     Secure multi-client chat server using SSL/TLS over TCP.
     """
-    
+
+    # Failed-authentication throttling. Without this, password guessing was
+    # completely unbounded: a wrong password just closed the connection, and
+    # the attacker reconnected immediately.
+    AUTH_MAX_FAILURES = 5      # per source address
+    AUTH_WINDOW_SECONDS = 60   # sliding window the failures are counted over
+    AUTH_LOCKOUT_SECONDS = 60  # how long a tripped address stays blocked
+
     def __init__(
         self,
         host: str = '0.0.0.0',
@@ -62,6 +70,10 @@ class ChatServer:
         self.server_socket: Optional[socket.socket] = None
         self.active_users: Dict[str, ClientHandler] = {}
         self.active_rooms = defaultdict(set)
+
+        # Sliding window of failed auth timestamps, keyed by source IP.
+        self.auth_failures: Dict[str, Deque[float]] = defaultdict(deque)
+        self.auth_lock = threading.Lock()
     
     def start(self):
         """
@@ -164,25 +176,80 @@ class ChatServer:
         finally:
             self.stop()
     
+    def _auth_source(self, client: ClientHandler) -> str:
+        """Source address used as the throttling key."""
+        try:
+            return str(client.address[0])
+        except (TypeError, IndexError):
+            return "unknown"
+
+    def _auth_blocked_for(self, source: str) -> float:
+        """Seconds remaining before `source` may attempt auth again (0 if allowed)."""
+        now = time.monotonic()
+        with self.auth_lock:
+            window = self.auth_failures[source]
+            while window and now - window[0] > self.AUTH_WINDOW_SECONDS:
+                window.popleft()
+            if len(window) >= self.AUTH_MAX_FAILURES:
+                remaining = self.AUTH_LOCKOUT_SECONDS - (now - window[-1])
+                if remaining > 0:
+                    return remaining
+                window.clear()
+        return 0.0
+
+    def _record_auth_failure(self, source: str):
+        with self.auth_lock:
+            self.auth_failures[source].append(time.monotonic())
+
+    def _clear_auth_failures(self, source: str):
+        with self.auth_lock:
+            self.auth_failures.pop(source, None)
+
     def authenticate_client(
         self,
         client: ClientHandler,
         username: str,
-        password: str
+        password: str,
+        register: bool = False
     ) -> Dict[str, str]:
         if not username:
             return {"ok": False, "error": "Username cannot be empty."}
         if not password:
             return {"ok": False, "error": "Password cannot be empty."}
 
+        source = self._auth_source(client)
+        blocked_for = self._auth_blocked_for(source)
+        if blocked_for > 0:
+            return {
+                "ok": False,
+                "error": (
+                    "Too many failed sign-in attempts. "
+                    f"Try again in {int(blocked_for) + 1}s."
+                ),
+            }
+
         with self.clients_lock:
             existing_client = self.active_users.get(username)
             if existing_client and existing_client is not client and existing_client.running:
                 return {"ok": False, "error": f"User '{username}' is already logged in."}
 
-        auth_result = self.database.register_or_login(username, password)
-        if auth_result["status"] == "invalid_password":
-            return {"ok": False, "error": "Invalid password."}
+        # `register` must be requested explicitly. Previously an unknown
+        # username was created on the spot, so a typo silently made a new
+        # account and anyone could farm arbitrary identities.
+        auth_result = self.database.register_or_login(username, password, allow_register=register)
+        status = auth_result["status"]
+
+        if status in ("invalid_password", "no_such_user"):
+            self._record_auth_failure(source)
+            # Deliberately identical wording for both cases, so a failed
+            # attempt does not reveal whether the account exists.
+            return {"ok": False, "error": "Invalid username or password."}
+
+        if status == "already_exists":
+            self._record_auth_failure(source)
+            return {"ok": False, "error": f"User '{username}' already exists. Sign in instead."}
+
+        self._clear_auth_failures(source)
 
         with self.clients_lock:
             self.active_users[username] = client

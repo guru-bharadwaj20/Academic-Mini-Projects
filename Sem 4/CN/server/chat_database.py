@@ -84,7 +84,19 @@ class ChatDatabase:
             ).fetchall()
         return [row["name"] for row in rows]
 
-    def register_or_login(self, username: str, password: str) -> Dict[str, str]:
+    def register_or_login(
+        self,
+        username: str,
+        password: str,
+        allow_register: bool = False
+    ) -> Dict[str, str]:
+        """Authenticate `username`, creating the account only if asked to.
+
+        `allow_register` must be set explicitly by the caller. Creating an
+        account as a side effect of a failed lookup meant every typo'd
+        username silently became a new account, and let anyone farm
+        arbitrary identities just by connecting.
+        """
         with self.lock, self._connect() as connection:
             row = connection.execute(
                 """
@@ -96,6 +108,8 @@ class ChatDatabase:
             ).fetchone()
 
             if row is None:
+                if not allow_register:
+                    return {"status": "no_such_user"}
                 salt = os.urandom(16)
                 password_hash = self._hash_password(password, salt)
                 connection.execute(
@@ -107,6 +121,9 @@ class ChatDatabase:
                 )
                 connection.commit()
                 return {"status": "registered"}
+
+            if allow_register:
+                return {"status": "already_exists"}
 
             salt = bytes.fromhex(row["password_salt"])
             password_hash = self._hash_password(password, salt)
