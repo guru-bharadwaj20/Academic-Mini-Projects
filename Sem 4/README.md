@@ -4,7 +4,7 @@ This folder contains Semester-4 course projects covering Computer Networks, Desi
 
 ---
 
-## 📁 Project Overview
+## Project Overview
 
 ### 1️⃣ CN — *Simple Encrypted Chat (Python)*
 A lightweight client-server chat implementation with TLS certificates and a simple message protocol.
