@@ -10,6 +10,12 @@ from typing import Callable, Dict, List, Optional
 
 from utils.message_protocol import MessageProtocol
 
+# The server uses a self-signed certificate, so that certificate is also the
+# trust anchor the client pins against. Resolved relative to this file so the
+# client works from any working directory.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_CA_FILE = os.path.join(_PROJECT_ROOT, "certs", "server.crt")
+
 
 class ChatClient:
     """Networking layer for the Pulse-Chat client."""
@@ -23,12 +29,14 @@ class ChatClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         event_callback: Optional[Callable[[str, Dict], None]] = None,
+        ca_file: Optional[str] = None,
     ):
         self.server_host = server_host
         self.server_port = server_port
         self.username = username
         self.password = password
         self.event_callback = event_callback
+        self.ca_file = ca_file or DEFAULT_CA_FILE
 
         self.socket = None
         self.running = False
@@ -80,11 +88,30 @@ class ChatClient:
             self._emit_error("Username and password are required.")
             return False
 
+        if not os.path.exists(self.ca_file):
+            self._emit_error(
+                f"Server certificate not found at {self.ca_file}. "
+                "Run 'sh certs/generate_certs.sh' first."
+            )
+            return False
+
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            # Verify the server's certificate and match it against the
+            # hostname we asked for. Previously this was
+            #     check_hostname = False
+            #     verify_mode    = ssl.CERT_NONE
+            # which accepted ANY certificate from ANY server, so the TLS
+            # layer encrypted the traffic but authenticated nothing - a
+            # trivial MITM could read and rewrite every message and every
+            # password in cleartext.
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+            ssl_context.check_hostname = True
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+            ssl_context.load_verify_locations(cafile=self.ca_file)
+
             secure_socket = ssl_context.wrap_socket(
                 client_socket,
                 server_hostname=self.server_host,
@@ -112,6 +139,14 @@ class ChatClient:
 
         except ConnectionRefusedError:
             self._emit_status("Server unavailable. Retrying...")
+            return False
+        except ssl.SSLCertVerificationError as exc:
+            self._emit_error(
+                f"Server certificate rejected: {exc}. The certificate in "
+                f"{self.ca_file} must be the one the server is serving, and "
+                f"its subjectAltName must cover '{self.server_host}'. "
+                "Regenerate with 'sh certs/generate_certs.sh'."
+            )
             return False
         except ssl.SSLError as exc:
             self._emit_error(f"SSL error: {exc}")
