@@ -33,7 +33,9 @@ typedef struct SymptomChecker {
 void initializeChecker(SymptomChecker_t* checker);
 void addAssociation(SymptomChecker_t* checker, const char* symptom, const char* disease, double weight);
 Suggestion_t* checkSymptoms(SymptomChecker_t* checker, const char** inputSymptoms, int numInputs, int* resultCount);
-void mergeSort(Suggestion_t* arr, int size);
+/* Returns 0 on success, -1 if the scratch buffer could not be
+   allocated (in which case `arr` is left untouched). */
+int mergeSort(Suggestion_t* arr, int size);
 void freeChecker(SymptomChecker_t* checker);
 void printMedication(const char* disease);
 
