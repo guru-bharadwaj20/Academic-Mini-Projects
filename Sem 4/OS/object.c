@@ -1,6 +1,7 @@
 // object.c — Content-addressable object store
 
 #include "pes.h"
+#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

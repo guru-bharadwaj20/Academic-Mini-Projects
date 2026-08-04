@@ -3,14 +3,12 @@
 #include "pes.h"
 #include "tree.h"
 #include "index.h"
+#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
-
-// Forward declaration
-int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 
 #define MODE_FILE      0100644
 #define MODE_EXEC      0100755

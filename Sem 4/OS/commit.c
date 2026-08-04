@@ -3,6 +3,7 @@
 #include "commit.h"
 #include "index.h"
 #include "tree.h"
+#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,10 +11,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
-
-// Forward declarations
-int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
-int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out);
 
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
