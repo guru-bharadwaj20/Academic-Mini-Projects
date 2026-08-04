@@ -2,6 +2,7 @@
 
 #include "index.h"
 #include "object.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,7 +111,12 @@ int index_load(Index *index) {
         IndexEntry *e = &index->entries[index->count];
         char hex[HASH_HEX_SIZE + 1];
 
-        int rc = fscanf(f, "%o %64s %u %u %511s",
+        /* mtime_sec is uint64_t. Reading it with "%u" wrote only 32 bits
+           and left the upper half indeterminate, so index_status compared
+           file mtimes against garbage and reported clean files as
+           modified. SCNu64/PRIu64 keep the width correct on every
+           platform. */
+        int rc = fscanf(f, "%o %64s %" SCNu64 " %u %511s",
                         &e->mode, hex,
                         &e->mtime_sec, &e->size, e->path);
         if (rc != 5) break;
@@ -143,7 +149,7 @@ int index_save(const Index *index) {
         IndexEntry *e = &sorted->entries[i];
         char hex[HASH_HEX_SIZE + 1];
         hash_to_hex(&e->hash, hex);
-        fprintf(f, "%o %s %u %u %s\n",
+        fprintf(f, "%o %s %" PRIu64 " %u %s\n",
                 e->mode, hex, e->mtime_sec, e->size, e->path);
     }
 
