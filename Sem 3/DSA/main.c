@@ -62,7 +62,10 @@ static void freeSymptomList(char** list, int count) {
 int main() {
     SymptomChecker_t checker;
     initializeChecker(&checker);
-    char choice;
+    /* Initialised: if the first scanf() below fails (EOF, closed stdin,
+       piped input), an uninitialised `choice` made the do/while condition
+       read an indeterminate value. */
+    char choice = 'n';
 
     printf("--- INTERACTIVE DISEASE SYMPTOM CHECKER ---\n");
 
@@ -156,8 +159,20 @@ int main() {
         }
 
         printf("\nAnother check? (y/n): ");
-        scanf(" %c", &choice);
-        while (getchar() != '\n');
+        if (scanf(" %c", &choice) != 1) {
+            /* EOF or a read error - stop instead of spinning. */
+            choice = 'n';
+            break;
+        }
+
+        /* Drain the rest of the line. The old `while (getchar() != '\n');`
+           looped forever once stdin hit EOF, because getchar() then returns
+           EOF on every call and never '\n' - so piping input or pressing
+           Ctrl-D hung the program. */
+        int ch;
+        while ((ch = getchar()) != '\n' && ch != EOF) {
+            /* discard */
+        }
 
     } while (choice == 'y' || choice == 'Y');
 
