@@ -23,8 +23,12 @@ build/
 *.so
 *.dylib
 
-# C test binaries
-test_*
+# C test binaries (exact names only - a `test_*` glob also swallows the
+# test SOURCES, e.g. test_objects.c / test_sequence.sh)
+test_objects
+test_objects.exe
+test_tree
+test_tree.exe
 
 # Editor / OS
 .vscode/
