@@ -51,18 +51,14 @@ export default function AlgorithmTrace({ result }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [result]);
 
-  if (!result) {
-    return <div style={{ color: 'var(--text3)', textAlign: 'center', padding: '3rem' }}>Run MST first.</div>;
-  }
-
-  const { steps, cities } = result;
+  // Everything hook-based must run on EVERY render, so it has to sit above
+  // the `!result` early return below. Calling useMemo after that return
+  // changed the hook count between renders once `result` arrived, and React
+  // threw "Rendered more hooks than during the previous render", blanking
+  // the whole app (there is no error boundary above this component).
+  const steps = result?.steps ?? [];
+  const cities = result?.cities ?? [];
   const activeSteps = playIndex === -1 ? [] : steps.slice(0, playIndex + 1);
-
-  const accepted = activeSteps.filter(s => s.accepted).length;
-  const rejected = activeSteps.filter(s => !s.accepted).length;
-  const runningCost = activeSteps.filter(s => s.accepted).reduce((sum, e) => sum + e.cost, 0);
-
-  const currentStepNumber = playIndex === -1 ? 0 : playIndex + 1;
 
   const components = useMemo(() => {
     const n = cities.length;
@@ -88,7 +84,20 @@ export default function AlgorithmTrace({ result }) {
       map.get(root).push(i);
     }
     return [...map.values()].sort((a, b) => b.length - a.length);
-  }, [activeSteps, cities.length]);
+    // `activeSteps` is a fresh array on every render, so depending on it
+    // defeated memoisation entirely. `result` + `playIndex` are the real,
+    // stable inputs it is derived from.
+  }, [result, playIndex]);
+
+  if (!result) {
+    return <div style={{ color: 'var(--text3)', textAlign: 'center', padding: '3rem' }}>Run MST first.</div>;
+  }
+
+  const accepted = activeSteps.filter(s => s.accepted).length;
+  const rejected = activeSteps.filter(s => !s.accepted).length;
+  const runningCost = activeSteps.filter(s => s.accepted).reduce((sum, e) => sum + e.cost, 0);
+
+  const currentStepNumber = playIndex === -1 ? 0 : playIndex + 1;
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
