@@ -14,20 +14,36 @@
 
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
+// Advance past the next newline, or NULL if there is not one.
+//
+// commit_parse used to write `p = strchr(p, '\n') + 1;` in five places with
+// no check. On a truncated or malformed commit object strchr returns NULL,
+// so this computed NULL+1 and the next read segfaulted - `pes log` crashed
+// on any corrupt object instead of reporting it.
+static const char *next_line(const char *p) {
+    if (p == NULL) return NULL;
+    const char *newline = strchr(p, '\n');
+    return newline ? newline + 1 : NULL;
+}
+
 int commit_parse(const void *data, size_t len, Commit *commit_out) {
     (void)len;
     const char *p = (const char *)data;
     char hex[HASH_HEX_SIZE + 1];
 
+    if (p == NULL) return -1;
+
     if (sscanf(p, "tree %64s\n", hex) != 1) return -1;
     if (hex_to_hash(hex, &commit_out->tree) != 0) return -1;
-    p = strchr(p, '\n') + 1;
+    p = next_line(p);
+    if (!p) return -1;
 
     if (strncmp(p, "parent ", 7) == 0) {
         if (sscanf(p, "parent %64s\n", hex) != 1) return -1;
         if (hex_to_hash(hex, &commit_out->parent) != 0) return -1;
         commit_out->has_parent = 1;
-        p = strchr(p, '\n') + 1;
+        p = next_line(p);
+        if (!p) return -1;
     } else {
         commit_out->has_parent = 0;
     }
@@ -41,9 +57,14 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
     *last_space = '\0';
     snprintf(commit_out->author, sizeof(commit_out->author), "%s", author_buf);
     commit_out->timestamp = ts;
-    p = strchr(p, '\n') + 1;
-    p = strchr(p, '\n') + 1;
-    p = strchr(p, '\n') + 1;
+
+    // Skip the author line, the committer line, and the blank separator.
+    p = next_line(p);
+    if (!p) return -1;
+    p = next_line(p);
+    if (!p) return -1;
+    p = next_line(p);
+    if (!p) return -1;
 
     snprintf(commit_out->message, sizeof(commit_out->message), "%s", p);
     return 0;
