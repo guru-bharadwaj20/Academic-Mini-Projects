@@ -58,6 +58,21 @@ export default function GraphView({ result }) {
 
   useEffect(() => () => clearInterval(animateTimer.current), []);
 
+  // Hooks must run on EVERY render, so this must sit above the `!result`
+  // early return below. Calling useMemo after that return changed the hook
+  // count between renders once `result` arrived, and React threw "Rendered
+  // more hooks than during the previous render" - blanking the whole app,
+  // since there is no error boundary above this component. Reproduced by
+  // opening the Graph tab before running the MST, then running it.
+  const mstSet = useMemo(() => {
+    const s = new Set();
+    (result?.mstEdges ?? []).forEach(e => {
+      const key = `${Math.min(e.u, e.v)}-${Math.max(e.u, e.v)}`;
+      s.add(key);
+    });
+    return s;
+  }, [result]);
+
   if (!result) {
     return (
       <div style={{ color: 'var(--text3)', textAlign: 'center', padding: '3rem' }}>
@@ -67,15 +82,6 @@ export default function GraphView({ result }) {
   }
 
   const { cities, edges, mstEdges } = result;
-
-  const mstSet = useMemo(() => {
-    const s = new Set();
-    mstEdges.forEach(e => {
-      const key = `${Math.min(e.u, e.v)}-${Math.max(e.u, e.v)}`;
-      s.add(key);
-    });
-    return s;
-  }, [mstEdges]);
 
   function toWorld(clientX, clientY) {
     const rect = svgRef.current.getBoundingClientRect();
