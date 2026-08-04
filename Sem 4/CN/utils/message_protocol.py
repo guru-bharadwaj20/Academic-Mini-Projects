@@ -22,7 +22,35 @@ class MessageProtocol:
     """
     Handles message encoding and decoding for the chat protocol.
     """
-    
+
+    # Hard ceiling on a single newline-delimited frame. Without one, a peer
+    # that sends bytes and never a newline makes the reader buffer until the
+    # process runs out of memory.
+    #
+    # Sized to admit the largest legitimate frame: a MAX_FILE_BYTES payload
+    # base64-encoded (+~33%) plus JSON overhead.
+    MAX_FILE_BYTES = 2 * 1024 * 1024
+    MAX_MESSAGE_BYTES = 4 * 1024 * 1024
+
+    @staticmethod
+    def read_message_line(stream, max_bytes: int = None) -> bytes:
+        """Read one framed message, refusing oversized ones.
+
+        Returns b'' on a clean EOF. Raises ValueError if the frame exceeds
+        the limit, which callers treat as a protocol violation and drop the
+        connection - the remainder of an oversized line is left unread, so
+        the stream cannot be trusted afterwards.
+        """
+        limit = MessageProtocol.MAX_MESSAGE_BYTES if max_bytes is None else max_bytes
+        data = stream.readline(limit + 1)
+        if not data:
+            return b""
+        if len(data) > limit or not data.endswith(b"\n"):
+            raise ValueError(
+                f"message frame exceeds the {limit} byte limit"
+            )
+        return data
+
     # Message type constants
     TYPE_CHAT = "chat"
     TYPE_JOIN = "join"
