@@ -80,23 +80,44 @@ int commit_serialize(const Commit *commit, void **data_out, size_t *len_out) {
     char *buf = malloc(buf_size);
     if (!buf) return -1;
 
-    int n = 0;
-    n += snprintf(buf + n, buf_size - n, "tree %s\n", tree_hex);
+    // snprintf returns the length it WOULD have written. The previous
+    // `n += snprintf(buf + n, buf_size - n, ...)` therefore let n exceed
+    // buf_size on truncation, and since buf_size - n is size_t, that
+    // underflowed to ~2^64 - so the next snprintf was handed a colossal
+    // "remaining space" and wrote past the end of the buffer.
+    //
+    // APPEND checks each result against the space actually left and bails
+    // out instead.
+    size_t n = 0;
+    int written;
+
+#define APPEND(...)                                                   \
+    do {                                                              \
+        written = snprintf(buf + n, buf_size - n, __VA_ARGS__);       \
+        if (written < 0 || (size_t)written >= buf_size - n) {          \
+            free(buf);                                                \
+            return -1;                                                \
+        }                                                             \
+        n += (size_t)written;                                         \
+    } while (0)
+
+    APPEND("tree %s\n", tree_hex);
     if (commit->has_parent) {
         hash_to_hex(&commit->parent, parent_hex);
-        n += snprintf(buf + n, buf_size - n, "parent %s\n", parent_hex);
+        APPEND("parent %s\n", parent_hex);
     }
-    n += snprintf(buf + n, buf_size - n,
-                  "author %s %" PRIu64 "\n"
-                  "committer %s %" PRIu64 "\n"
-                  "\n"
-                  "%s",
-                  commit->author, commit->timestamp,
-                  commit->author, commit->timestamp,
-                  commit->message);
+    APPEND("author %s %" PRIu64 "\n"
+           "committer %s %" PRIu64 "\n"
+           "\n"
+           "%s",
+           commit->author, commit->timestamp,
+           commit->author, commit->timestamp,
+           commit->message);
+
+#undef APPEND
 
     *data_out = buf;
-    *len_out = (size_t)n;
+    *len_out = n;
     return 0;
 }
 
