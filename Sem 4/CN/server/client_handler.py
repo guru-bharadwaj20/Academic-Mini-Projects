@@ -104,7 +104,8 @@ class ClientHandler:
             auth_result = self.authenticate(
                 self,
                 message.get("username", "").strip(),
-                message.get("password", "")
+                message.get("password", ""),
+                bool(message.get("register", False))
             )
             if not auth_result.get("ok"):
                 self.send_message(

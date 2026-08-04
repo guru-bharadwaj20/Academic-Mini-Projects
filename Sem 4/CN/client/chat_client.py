@@ -30,6 +30,7 @@ class ChatClient:
         password: Optional[str] = None,
         event_callback: Optional[Callable[[str, Dict], None]] = None,
         ca_file: Optional[str] = None,
+        register: bool = False,
     ):
         self.server_host = server_host
         self.server_port = server_port
@@ -37,6 +38,9 @@ class ChatClient:
         self.password = password
         self.event_callback = event_callback
         self.ca_file = ca_file or DEFAULT_CA_FILE
+        # Account creation must be requested explicitly; the server no longer
+        # creates an account as a side effect of an unknown username.
+        self.register = register
 
         self.socket = None
         self.running = False
@@ -126,6 +130,7 @@ class ChatClient:
                 self.username,
                 "authenticate",
                 password=self.password,
+                register=self.register,
             )
 
             with self.socket_lock:
@@ -472,13 +477,19 @@ class TerminalChatClient:
         self.server_port = server_port
         self.username = username or self._prompt_username()
         self.password = self._prompt_password()
+        self.register = self._prompt_register()
         self.client = ChatClient(
             server_host=server_host,
             server_port=server_port,
             username=self.username,
             password=self.password,
             event_callback=self._handle_event,
+            register=self.register,
         )
+
+    def _prompt_register(self) -> bool:
+        answer = input("Create a new account with this username? [y/N]: ").strip().lower()
+        return answer in ("y", "yes")
 
     def _prompt_username(self) -> str:
         username = input("Enter your username: ").strip()
@@ -556,6 +567,7 @@ class ChatClientApp:
         self.port_var = tk.StringVar(value=str(server_port))
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
+        self.register_var = tk.BooleanVar(value=False)
         self.room_var = tk.StringVar(value="lobby")
         self.join_room_var = tk.StringVar()
         self.recipient_var = tk.StringVar()
@@ -590,6 +602,22 @@ class ChatClientApp:
             show="*",
         ).grid(row=1, column=3, padx=(0, 8))
 
+        # Account creation is opt-in: the server no longer creates an account
+        # just because the username is unknown.
+        tk.Checkbutton(
+            top_bar,
+            text="New account",
+            variable=self.register_var,
+            bg="black",
+            fg="white",
+            selectcolor="black",
+            activebackground="black",
+            activeforeground="white",
+            font=base_font,
+            highlightthickness=0,
+            bd=0,
+        ).grid(row=1, column=4, padx=(8, 8))
+
         tk.Button(
             top_bar,
             text="Connect",
@@ -602,7 +630,7 @@ class ChatClientApp:
             padx=16,
             pady=6,
             font=header_font,
-        ).grid(row=1, column=4, padx=(8, 8))
+        ).grid(row=1, column=5, padx=(8, 8))
 
         tk.Button(
             top_bar,
@@ -617,7 +645,7 @@ class ChatClientApp:
             padx=16,
             pady=6,
             font=header_font,
-        ).grid(row=1, column=5)
+        ).grid(row=1, column=6)
 
         room_bar = tk.Frame(self.root, bg="black", padx=12, pady=8)
         room_bar.pack(fill="x")
@@ -811,6 +839,7 @@ class ChatClientApp:
             username=username,
             password=password,
             event_callback=self._queue_event,
+            register=bool(self.register_var.get()),
         )
         self.client.start()
 
