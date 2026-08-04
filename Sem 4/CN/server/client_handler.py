@@ -85,8 +85,10 @@ class ClientHandler:
             # This simplifies receiving messages delimited by newlines
             client_file = self.socket.makefile('rb')
             
-            # First message should authenticate the user
-            data = client_file.readline()
+            # First message should authenticate the user.
+            # Bounded read: an unbounded readline() let a peer that never
+            # sends a newline grow the server's buffer without limit.
+            data = MessageProtocol.read_message_line(client_file)
             if not data:
                 return
             
@@ -158,9 +160,9 @@ class ClientHandler:
             
             # Main message receiving loop
             while self.running:
-                # Read one line (one message) from the client
-                data = client_file.readline()
-                
+                # Read one line (one message) from the client, bounded.
+                data = MessageProtocol.read_message_line(client_file)
+
                 if not data:
                     # Client disconnected
                     break
@@ -283,6 +285,19 @@ class ClientHandler:
                             )
                             continue
 
+                        # The sending client caps uploads, but the server must
+                        # enforce its own limit - a hand-rolled client could
+                        # ignore that cap entirely.
+                        if len(file_data) > MessageProtocol.MAX_FILE_BYTES * 2:
+                            self.send_message(
+                                MessageProtocol.create_message(
+                                    MessageProtocol.TYPE_ERROR,
+                                    "system",
+                                    "File is too large (2 MB maximum)."
+                                )
+                            )
+                            continue
+
                         direct_result = self.send_direct_message(
                             recipient,
                             MessageProtocol.create_message(
@@ -314,6 +329,18 @@ class ClientHandler:
                                 )
                             )
         
+        except ValueError as exc:
+            # Oversized / malformed frame: the stream can no longer be framed
+            # reliably, so drop the connection.
+            print(f"[SERVER] Protocol violation from {self.username or self.address}: {exc}")
+            try:
+                self.send_message(
+                    MessageProtocol.create_message(
+                        MessageProtocol.TYPE_ERROR, "system", str(exc)
+                    )
+                )
+            except Exception:
+                pass
         except ConnectionResetError:
             print(f"[SERVER] Connection reset by {self.username or self.address}")
         except Exception as e:

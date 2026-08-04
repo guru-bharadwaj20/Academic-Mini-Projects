@@ -1,4 +1,5 @@
 import base64
+import binascii
 import getpass
 import os
 import queue
@@ -291,7 +292,9 @@ class ChatClient:
             server_file = active_socket.makefile("rb")
 
             while self.running and self.connected:
-                data = server_file.readline()
+                # Bounded read - a hostile or broken server could otherwise
+                # stream endless bytes with no newline and exhaust memory.
+                data = MessageProtocol.read_message_line(server_file)
                 if not data:
                     self._handle_disconnect("Server stopped or connection closed.")
                     break
@@ -333,7 +336,16 @@ class ChatClient:
             self._emit("users_updated", users=self.known_users)
 
         if msg_type == MessageProtocol.TYPE_FILE:
-            saved_path = self._save_incoming_file(message)
+            try:
+                saved_path = self._save_incoming_file(message)
+            except (ValueError, OSError, binascii.Error) as exc:
+                # Reject the file without tearing down an otherwise healthy
+                # session - this used to bubble up to the receive loop's
+                # blanket handler and disconnect the client.
+                self._emit_error(
+                    f"Could not save '{message.get('filename', 'file')}': {exc}"
+                )
+                return
             notice = MessageProtocol.create_message(
                 MessageProtocol.TYPE_SYSTEM,
                 "system",
@@ -351,6 +363,12 @@ class ChatClient:
         sender = message.get("sender", message.get("username", "unknown"))
         filename = message.get("filename", "file")
         file_data = message.get("file_data", "")
+
+        # MAX_FILE_SIZE was only ever checked on SEND. An incoming payload was
+        # decoded and written to disk unbounded, so a peer could fill the
+        # receiver's drive. Base64 inflates by ~4/3, so allow 2x as slack.
+        if len(file_data) > self.MAX_FILE_SIZE * 2:
+            raise ValueError("Incoming file exceeds the 2 MB limit; discarded.")
 
         downloads_dir = os.path.join("downloads", self.username or "user")
         os.makedirs(downloads_dir, exist_ok=True)
