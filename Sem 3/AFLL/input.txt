@@ -8,6 +8,10 @@ while(i<5){
 
 int array[];
 
+int total;
+int count = 0;
+string name;
+
 int Sum(int a, int b){
     return a+b;
 }
