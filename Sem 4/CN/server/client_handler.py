@@ -171,6 +171,14 @@ class ClientHandler:
                     
                     if msg_type == MessageProtocol.TYPE_CHAT:
                         room_name = message.get("room") or self.current_room
+
+                        # NEVER trust the client's own idea of who it is.
+                        # The inbound dict was previously relayed verbatim,
+                        # including its "username" field, so any client could
+                        # send {"type":"chat","username":"admin",...} and have
+                        # it broadcast - and persisted to SQLite - under a
+                        # name it does not own.
+                        message["username"] = self.username
                         message["room"] = room_name
                         self.current_room = room_name
                         print(f"[{self.username}]: {message.get('content', '')}")
