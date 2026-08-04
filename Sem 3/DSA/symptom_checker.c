@@ -123,8 +123,23 @@ Suggestion_t* checkSymptoms(SymptomChecker_t* checker, const char** inputSymptom
 
     mergeSort(tempResults, tempCount);
 
-    Suggestion_t* finalResults = malloc(tempCount * sizeof(Suggestion_t));
-    memcpy(finalResults, tempResults, tempCount * sizeof(Suggestion_t));
+    /* Nothing matched. Returning the malloc(0) block here meant callers had
+       to remember to free a pointer to zero bytes, and memcpy() onto a
+       possibly-NULL destination is undefined even for a zero length. */
+    if (tempCount == 0) {
+        free(tempResults);
+        *resultCount = 0;
+        return NULL;
+    }
+
+    Suggestion_t* finalResults = malloc((size_t)tempCount * sizeof(Suggestion_t));
+    if (finalResults == NULL) {
+        /* Previously unchecked: memcpy() straight onto a NULL destination. */
+        free(tempResults);
+        *resultCount = 0;
+        return NULL;
+    }
+    memcpy(finalResults, tempResults, (size_t)tempCount * sizeof(Suggestion_t));
     free(tempResults);
 
     *resultCount = tempCount;
