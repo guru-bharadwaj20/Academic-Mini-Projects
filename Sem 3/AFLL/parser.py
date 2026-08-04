@@ -34,6 +34,7 @@ def p_statement(p):
                  | while_loop
                  | if_else_statement
                  | for_loop
+                 | variable_declaration
                  | array_declaration
                  | return_statement
                  | expression_statement'''
@@ -92,6 +93,22 @@ def p_optional_expression(p):
     '''optional_expression : expression
                            | empty'''
     p[0] = p[1] if len(p) == 2 else None
+
+def p_variable_declaration(p):
+    '''variable_declaration : type ID SEMICOLON
+                            | type ID EQUALS expression SEMICOLON'''
+    # The grammar could declare arrays ("int a[10];") and functions but had
+    # no rule for a plain scalar declaration, so even "int x;" was rejected
+    # by a language advertised as C-like.
+    #
+    # No conflict with function_declaration / array_declaration: all three
+    # share the "type ID" prefix but are separated by a single lookahead
+    # token (SEMICOLON / EQUALS vs LPAREN vs LBRACKET).
+    if len(p) == 4:
+        p[0] = ('variable_declaration', p[1], p[2])
+    else:
+        p[0] = ('variable_declaration_init', p[1], p[2], p[4])
+
 
 def p_array_declaration(p):
     '''array_declaration : type ID LBRACKET RBRACKET SEMICOLON
