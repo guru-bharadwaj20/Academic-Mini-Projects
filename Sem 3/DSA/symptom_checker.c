@@ -9,54 +9,52 @@ static int findSymptomIndex(SymptomChecker_t* checker, const char* symptom) {
     return -1;
 }
 
-static void merge(Suggestion_t* arr, int left, int mid, int right) {
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
+/* Merge using a caller-supplied scratch buffer.
+ *
+ * This used to malloc two temporary halves on EVERY merge, and on failure
+ * it simply returned - leaving that range unsorted while the caller went on
+ * believing the sort had succeeded, so the "ranked" output was silently
+ * wrong. One scratch buffer allocated once in mergeSort() removes the
+ * failure mode from the recursion entirely (and turns O(n log n)
+ * allocations into a single one). */
+static void merge(Suggestion_t* arr, Suggestion_t* scratch, int left, int mid, int right) {
+    for (int i = left; i <= right; i++)
+        scratch[i] = arr[i];
 
-    Suggestion_t* L = malloc(n1 * sizeof(Suggestion_t));
-    Suggestion_t* R = malloc(n2 * sizeof(Suggestion_t));
+    int i = left, j = mid + 1, k = left;
 
-    if (L == NULL || R == NULL) {
-        if (L) free(L);
-        if (R) free(R);
-        return;
-    }
-
-    for (int i = 0; i < n1; i++)
-        L[i] = arr[left + i];
-    for (int j = 0; j < n2; j++)
-        R[j] = arr[mid + 1 + j];
-
-    int i = 0, j = 0, k = left;
-
-    while (i < n1 && j < n2) {
-        if (L[i].likelihoodScore >= R[j].likelihoodScore) {
-            arr[k++] = L[i++];
+    while (i <= mid && j <= right) {
+        if (scratch[i].likelihoodScore >= scratch[j].likelihoodScore) {
+            arr[k++] = scratch[i++];
         } else {
-            arr[k++] = R[j++];
+            arr[k++] = scratch[j++];
         }
     }
 
-    while (i < n1)
-        arr[k++] = L[i++];
-    while (j < n2)
-        arr[k++] = R[j++];
-
-    free(L);
-    free(R);
+    while (i <= mid)
+        arr[k++] = scratch[i++];
+    while (j <= right)
+        arr[k++] = scratch[j++];
 }
 
-static void mergeSortRecursive(Suggestion_t* arr, int left, int right) {
+static void mergeSortRecursive(Suggestion_t* arr, Suggestion_t* scratch, int left, int right) {
     if (left < right) {
         int mid = left + (right - left) / 2;
-        mergeSortRecursive(arr, left, mid);
-        mergeSortRecursive(arr, mid + 1, right);
-        merge(arr, left, mid, right);
+        mergeSortRecursive(arr, scratch, left, mid);
+        mergeSortRecursive(arr, scratch, mid + 1, right);
+        merge(arr, scratch, left, mid, right);
     }
 }
 
-void mergeSort(Suggestion_t* arr, int size) {
-    mergeSortRecursive(arr, 0, size - 1);
+int mergeSort(Suggestion_t* arr, int size) {
+    if (size < 2) return 0;
+
+    Suggestion_t* scratch = malloc((size_t)size * sizeof(Suggestion_t));
+    if (scratch == NULL) return -1;
+
+    mergeSortRecursive(arr, scratch, 0, size - 1);
+    free(scratch);
+    return 0;
 }
 
 void initializeChecker(SymptomChecker_t* checker) {
@@ -138,7 +136,14 @@ Suggestion_t* checkSymptoms(SymptomChecker_t* checker, const char** inputSymptom
         }
     }
 
-    mergeSort(tempResults, tempCount);
+    if (mergeSort(tempResults, tempCount) != 0) {
+        /* Previously the failure was swallowed and a partially sorted list
+           was returned as if it were correctly ranked. */
+        fprintf(stderr, "error: could not sort results (out of memory)\n");
+        free(tempResults);
+        *resultCount = 0;
+        return NULL;
+    }
 
     /* Nothing matched. Returning the malloc(0) block here meant callers had
        to remember to free a pointer to zero bytes, and memcpy() onto a
