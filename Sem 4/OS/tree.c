@@ -69,21 +69,36 @@ static int compare_tree_entries(const void *a, const void *b) {
 }
 
 int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
-    size_t max_size = tree->count * 296;
+    /* An empty tree is legitimate. malloc(0) may return NULL, which the old
+       `if (!buffer) return -1;` reported as a failure. */
+    if (tree->count <= 0) {
+        *data_out = NULL;
+        *len_out = 0;
+        return 0;
+    }
+
+    size_t max_size = (size_t)tree->count * 296;
     uint8_t *buffer = malloc(max_size);
     if (!buffer) return -1;
 
-    Tree sorted_tree = *tree;
-    qsort(sorted_tree.entries, sorted_tree.count, sizeof(TreeEntry), compare_tree_entries);
+    /* This copied the whole ~292 KB Tree struct onto the stack just to sort
+       it, regardless of how many entries were actually in use. Copy only the
+       live entries instead. */
+    TreeEntry *sorted = malloc((size_t)tree->count * sizeof(TreeEntry));
+    if (sorted == NULL) { free(buffer); return -1; }
+    memcpy(sorted, tree->entries, (size_t)tree->count * sizeof(TreeEntry));
+    qsort(sorted, tree->count, sizeof(TreeEntry), compare_tree_entries);
 
     size_t offset = 0;
-    for (int i = 0; i < sorted_tree.count; i++) {
-        const TreeEntry *entry = &sorted_tree.entries[i];
+    for (int i = 0; i < tree->count; i++) {
+        const TreeEntry *entry = &sorted[i];
         int written = sprintf((char *)buffer + offset, "%o %s", entry->mode, entry->name);
         offset += written + 1;
         memcpy(buffer + offset, entry->hash.hash, HASH_SIZE);
         offset += HASH_SIZE;
     }
+
+    free(sorted);
 
     *data_out = buffer;
     *len_out = offset;
@@ -93,8 +108,11 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 // ─── IMPLEMENTED ─────────────────────────────────────────────────────────────
 
 static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID *id_out) {
-    Tree tree;
-    tree.count = 0;
+    /* sizeof(Tree) is ~292 KB and this function recurses once per directory
+       level, so a deep tree multiplied that down the stack. Heap-allocate. */
+    Tree *tree = malloc(sizeof(Tree));
+    if (tree == NULL) return -1;
+    tree->count = 0;
 
     int i = 0;
     while (i < count) {
@@ -102,24 +120,24 @@ static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID 
         char *p = path;
         for (int d = 0; d < depth; d++) {
             p = strchr(p, '/');
-            if (!p) return -1;
+            if (!p) { free(tree); return -1; }
             p++;
         }
 
         char *slash = strchr(p, '/');
 
         if (!slash) {
-            TreeEntry *entry = &tree.entries[tree.count];
+            TreeEntry *entry = &tree->entries[tree->count];
             entry->mode = entries[i].mode;
             strncpy(entry->name, p, sizeof(entry->name) - 1);
             entry->name[sizeof(entry->name) - 1] = '\0';
             memcpy(entry->hash.hash, entries[i].hash.hash, HASH_SIZE);
-            tree.count++;
+            tree->count++;
             i++;
         } else {
             char dir_name[256];
             size_t dir_len = slash - p;
-            if (dir_len >= sizeof(dir_name)) return -1;
+            if (dir_len >= sizeof(dir_name)) { free(tree); return -1; }
             memcpy(dir_name, p, dir_len);
             dir_name[dir_len] = '\0';
 
@@ -140,31 +158,44 @@ static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID 
             }
 
             ObjectID sub_id;
-            if (write_tree_level(entries + i, j - i, depth + 1, &sub_id) != 0)
+            if (write_tree_level(entries + i, j - i, depth + 1, &sub_id) != 0) {
+                free(tree);
                 return -1;
+            }
 
-            TreeEntry *entry = &tree.entries[tree.count];
+            TreeEntry *entry = &tree->entries[tree->count];
             entry->mode = MODE_DIR;
             strncpy(entry->name, dir_name, sizeof(entry->name) - 1);
             entry->name[sizeof(entry->name) - 1] = '\0';
             memcpy(entry->hash.hash, sub_id.hash, HASH_SIZE);
-            tree.count++;
+            tree->count++;
             i = j;
         }
     }
 
     void *data;
     size_t len;
-    if (tree_serialize(&tree, &data, &len) != 0) return -1;
+    if (tree_serialize(tree, &data, &len) != 0) { free(tree); return -1; }
+    free(tree);
+
     int ret = object_write(OBJ_TREE, data, len, id_out);
     free(data);
     return ret;
 }
 
 int tree_from_index(ObjectID *id_out) {
-    Index idx;
-    memset(&idx, 0, sizeof(idx));
-    if (index_load(&idx) != 0) return -1;
-    if (idx.count == 0) return -1;
-    return write_tree_level(idx.entries, idx.count, 0, id_out);
+    /* sizeof(Index) is ~5.42 MB - too large for the stack, and the memset
+       below zeroed all of it on every commit. */
+    Index *idx = malloc(sizeof(Index));
+    if (idx == NULL) return -1;
+
+    memset(idx, 0, sizeof(*idx));
+    if (index_load(idx) != 0 || idx->count == 0) {
+        free(idx);
+        return -1;
+    }
+
+    int rc = write_tree_level(idx->entries, idx->count, 0, id_out);
+    free(idx);
+    return rc;
 }
