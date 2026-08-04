@@ -133,7 +133,7 @@ int main() {
         char** inputSymptoms = getUserInput(&numInputSymptoms);
 
         if (numInputSymptoms > 0) {
-            int resultCount;
+            int resultCount = 0;
             Suggestion_t* suggestions = checkSymptoms(&checker, (const char**)inputSymptoms, numInputSymptoms, &resultCount);
 
             if (suggestions && resultCount > 0) {
@@ -147,16 +147,26 @@ int main() {
                 printf("\nAll Conditions:\n");
                 for (int i = 0; i < resultCount; i++)
                     printf("%d. %s (%.2f)\n", i + 1, suggestions[i].diseaseName, suggestions[i].likelihoodScore);
-
-                free(suggestions);
+            } else {
+                printf("\nNo matching conditions for those symptoms.\n");
             }
 
-            freeSymptomList(inputSymptoms, numInputSymptoms);
+            /* Free unconditionally: when resultCount is 0, checkSymptoms
+               still returns the malloc(0) block, which the old
+               `if (suggestions && resultCount > 0)` guard leaked. */
+            free(suggestions);
 
             printf("\nHistory:\n");
             for (int i = historyCount - 1; i >= 0; i--)
                 printf("- %s\n", history[i]);
         }
+
+        /* getUserInput() always allocates the pointer array, even when the
+           user enters nothing. Freeing it only inside the
+           `numInputSymptoms > 0` branch leaked that array on every
+           iteration where the user typed 'done' or a blank line straight
+           away. */
+        freeSymptomList(inputSymptoms, numInputSymptoms);
 
         printf("\nAnother check? (y/n): ");
         if (scanf(" %c", &choice) != 1) {
