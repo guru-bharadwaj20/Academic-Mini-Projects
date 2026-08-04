@@ -29,6 +29,13 @@ share/python-wheels/
 ply-3.11/ply/*.pyc
 ply-3.11/ply/__pycache__/
 
+# PLY regenerates these from lexer.py/parser.py on every run - they are
+# build artefacts, not source, and committing them means a stale table can
+# silently override a changed grammar.
+parser.out
+parsetab.py
+lextab.py
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
