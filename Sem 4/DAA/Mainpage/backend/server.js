@@ -5,7 +5,39 @@ const cors = require("cors");
 const { optimizePricing, buildDemandModel, PRICE_TIERS } = require("./dp_pricing");
 
 const app = express();
-app.use(cors());
+// Restrict CORS to the local dev frontends. `cors()` with no options
+// reflects whatever Origin the caller sends, so ANY website the developer
+// happened to visit could call these APIs from the browser.
+// Override with CORS_ORIGINS="http://host:port,..." when needed.
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS ||
+  [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+  ].join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin(origin, callback) {
+    // No Origin header => not a browser cross-origin request (curl, tests,
+    // server-to-server). Those are unaffected by CORS, so allow them.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    // Omit the CORS headers rather than throwing: the browser blocks the
+    // response cleanly instead of the app returning a 500.
+    return callback(null, false);
+  },
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ============================================================
