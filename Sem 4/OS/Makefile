@@ -18,7 +18,8 @@ pes: $(OBJS)
 test_objects: test_objects.o object.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-test_tree: test_tree.o object.o tree.o
+# tree.o pulls in index_load via tree_from_index, so index.o must be linked too.
+test_tree: test_tree.o object.o tree.o index.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 # ─── Convenience targets ────────────────────────────────────────────────────
