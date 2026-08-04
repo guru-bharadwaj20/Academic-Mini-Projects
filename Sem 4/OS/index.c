@@ -1,6 +1,7 @@
 // index.c — Staging area implementation
 
 #include "index.h"
+#include "object.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
