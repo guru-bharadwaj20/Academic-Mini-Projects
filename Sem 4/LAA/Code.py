@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 from sympy import Matrix
@@ -9,7 +11,11 @@ import scipy.linalg as la
 # PES University
 # ─────────────────────────────────────────────────────────────────────────────
 
-df = pd.read_csv("cricket_dataset.csv")
+# Resolve the dataset next to this script so the pipeline runs from any
+# working directory, not just from inside Sem 4/LAA.
+DATASET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dataset.csv")
+
+df = pd.read_csv(DATASET_PATH)
 
 # Features used in the matrix pipeline (5 numerical columns)
 features = ["Runs", "Batting_Avg", "Strike_Rate", "Wickets", "Economy"]
