@@ -1,4 +1,11 @@
 import os
+import sys
+
+# This script prints Unicode maths/box-drawing characters (→ × λ █ ─ ✓ ᵀ).
+# The default Windows console encoding is cp1252, which cannot encode them,
+# so stdout must be switched to UTF-8 before anything is printed.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 import numpy as np
 import pandas as pd
