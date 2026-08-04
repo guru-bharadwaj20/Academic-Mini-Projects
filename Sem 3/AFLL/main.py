@@ -26,7 +26,9 @@ def parse_snippet(code: str, snippet_index: int):
     # can never be reported with a stale message.
     grammar.last_error = None
 
-    lexer.input(code)
+    # parser.parse() drives the lexer itself (feeding it via its own
+    # input() call), so the tokens produced by an explicit lexer.input(code)
+    # here were simply discarded. Removed.
     parsed = grammar.parser.parse(code)
 
     if parsed is not None:
