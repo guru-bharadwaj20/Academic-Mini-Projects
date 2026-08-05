@@ -90,8 +90,26 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
     size_t offset = 0;
     for (int i = 0; i < tree->count; i++) {
         const TreeEntry *entry = &sorted[i];
-        int written = sprintf((char *)buffer + offset, "%o %s", entry->mode, entry->name);
-        offset += written + 1;
+
+        /* sprintf() is unbounded: the 296-byte-per-entry estimate above only
+           holds if every name stays under 256 bytes, and nothing here
+           enforced that. snprintf against the space actually remaining makes
+           the bound explicit and fails instead of overflowing. */
+        size_t remaining = max_size - offset;
+        int written = snprintf((char *)buffer + offset, remaining, "%o %s",
+                               entry->mode, entry->name);
+        if (written < 0 || (size_t)written >= remaining) {
+            free(sorted);
+            free(buffer);
+            return -1;
+        }
+        offset += (size_t)written + 1;
+
+        if (offset + HASH_SIZE > max_size) {
+            free(sorted);
+            free(buffer);
+            return -1;
+        }
         memcpy(buffer + offset, entry->hash.hash, HASH_SIZE);
         offset += HASH_SIZE;
     }
