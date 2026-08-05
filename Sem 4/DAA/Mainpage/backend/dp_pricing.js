@@ -26,14 +26,27 @@ function clamp(x, lo, hi) {
  * Build demand model from base demand pattern and price sensitivity.
  * Also includes price-memory behavior: sudden price hikes reduce demand.
  */
-function buildDemandModel({ baseDemandByDay, priceSensitivity = 0.03, memoryPenalty = 0.15 }) {
-  const maxPrice = Math.max(...PRICE_TIERS);
+function buildDemandModel({
+  baseDemandByDay,
+  priceSensitivity = 0.03,
+  memoryPenalty = 0.15,
+  prices = PRICE_TIERS,
+}) {
+  // Anchor the model to the price list actually being optimised.
+  //
+  // This used to read the module-level PRICE_TIERS directly, while
+  // optimizePricing() was handed whatever `prices` the caller supplied - and
+  // the API accepts an arbitrary list. So a custom set was scored against a
+  // reference price of 100 no matter what: with tiers of [1000..2200] every
+  // priceFactor pinned to its 0.1 floor and demand at price 1000 came out as
+  // 4 instead of the base 40, making the whole schedule meaningless.
+  const referencePrice = Math.min(...prices);
 
   return (day, currentPrice, lastPrice) => {
     const base = baseDemandByDay[day];
 
     // Higher prices reduce demand proportionally.
-    const priceFactor = clamp(1 - priceSensitivity * (currentPrice - PRICE_TIERS[0]), 0.1, 1.2);
+    const priceFactor = clamp(1 - priceSensitivity * (currentPrice - referencePrice), 0.1, 1.2);
 
     // If current price > last price, apply memory penalty (customers react negatively).
     const penalty = lastPrice !== null && currentPrice > lastPrice ? (1 - memoryPenalty) : 1;
