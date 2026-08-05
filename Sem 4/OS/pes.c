@@ -14,10 +14,10 @@
 // ─── PROVIDED: Command Implementations ──────────────────────────────────────
 
 // Usage: pes init
-void cmd_init(void) {
+int cmd_init(void) {
     if (mkdir(PES_DIR, 0755) != 0 && access(PES_DIR, F_OK) != 0) {
         fprintf(stderr, "error: failed to create %s\n", PES_DIR);
-        return;
+        return 1;
     }
     mkdir(OBJECTS_DIR, 0755);
     mkdir(".pes/refs", 0755);
@@ -32,13 +32,14 @@ void cmd_init(void) {
     }
 
     printf("Initialized empty PES repository in %s/\n", PES_DIR);
+    return 0;
 }
 
 // Usage: pes add <file>...
-void cmd_add(int argc, char *argv[]) {
+int cmd_add(int argc, char *argv[]) {
     if (argc < 3) {
         fprintf(stderr, "Usage: pes add <file>...\n");
-        return;
+        return 1;
     }
 
     // sizeof(Index) is ~5.42 MB (MAX_INDEX_ENTRIES * sizeof(IndexEntry)).
@@ -47,59 +48,65 @@ void cmd_add(int argc, char *argv[]) {
     Index *index = malloc(sizeof(Index));
     if (index == NULL) {
         fprintf(stderr, "error: out of memory\n");
-        return;
+        return 1;
     }
 
     if (index_load(index) != 0) {
         fprintf(stderr, "error: failed to load index\n");
         free(index);
-        return;
+        return 1;
     }
 
+    // Report failure if ANY file could not be staged.
+    int failures = 0;
     for (int i = 2; i < argc; i++) {
         if (index_add(index, argv[i]) != 0) {
             fprintf(stderr, "error: failed to add '%s'\n", argv[i]);
+            failures++;
         }
     }
 
     free(index);
+    return failures == 0 ? 0 : 1;
 }
 
 // Usage: pes status
-void cmd_status(void) {
+int cmd_status(void) {
     // See cmd_add: sizeof(Index) is far too large for the stack.
     Index *index = malloc(sizeof(Index));
     if (index == NULL) {
         fprintf(stderr, "error: out of memory\n");
-        return;
+        return 1;
     }
 
     if (index_load(index) != 0) {
         fprintf(stderr, "error: failed to load index\n");
         free(index);
-        return;
+        return 1;
     }
     index_status(index);
     free(index);
+    return 0;
 }
 
 // Usage: pes commit -m <message>
-void cmd_commit(int argc, char *argv[]) {
+int cmd_commit(int argc, char *argv[]) {
     if (argc < 4 || strcmp(argv[2], "-m") != 0) {
         fprintf(stderr, "error: commit requires a message (-m \"message\")\n");
-        return;
+        return 1;
     }
 
     const char *message = argv[3];
     ObjectID commit_id;
     if (commit_create(message, &commit_id) != 0) {
         fprintf(stderr, "error: commit failed\n");
-        return;
+        return 1;
     }
 
     char hex[HASH_HEX_SIZE + 1];
     hash_to_hex(&commit_id, hex);
     printf("Committed: %.12s... %s\n", hex, message);
+    return 0;
 }
 
 // Callback for commit_walk used by cmd_log.
@@ -114,10 +121,12 @@ static void print_commit(const ObjectID *id, const Commit *commit, void *ctx) {
 }
 
 // Usage: pes log
-void cmd_log(void) {
+int cmd_log(void) {
     if (commit_walk(print_commit, NULL) != 0) {
         fprintf(stderr, "No commits yet.\n");
+        return 1;
     }
+    return 0;
 }
 
 // ─── PROVIDED: Command dispatch ─────────────────────────────────────────────
@@ -136,16 +145,17 @@ int main(int argc, char *argv[]) {
 
     const char *cmd = argv[1];
 
-    if      (strcmp(cmd, "init") == 0)     cmd_init();
-    else if (strcmp(cmd, "add") == 0)      cmd_add(argc, argv);
-    else if (strcmp(cmd, "status") == 0)   cmd_status();
-    else if (strcmp(cmd, "commit") == 0)   cmd_commit(argc, argv);
-    else if (strcmp(cmd, "log") == 0)      cmd_log();
-    else {
-        fprintf(stderr, "Unknown command: %s\n", cmd);
-        fprintf(stderr, "Run 'pes' with no arguments for usage.\n");
-        return 1;
-    }
+    // Propagate the command's status. main() used to return 0 no matter what
+    // happened, so a failed add or commit still looked like success to any
+    // script, Makefile or test harness driving this binary - which is also
+    // why the integration test could not assert on error paths.
+    if      (strcmp(cmd, "init") == 0)     return cmd_init();
+    else if (strcmp(cmd, "add") == 0)      return cmd_add(argc, argv);
+    else if (strcmp(cmd, "status") == 0)   return cmd_status();
+    else if (strcmp(cmd, "commit") == 0)   return cmd_commit(argc, argv);
+    else if (strcmp(cmd, "log") == 0)      return cmd_log();
 
-    return 0;
+    fprintf(stderr, "Unknown command: %s\n", cmd);
+    fprintf(stderr, "Run 'pes' with no arguments for usage.\n");
+    return 1;
 }
