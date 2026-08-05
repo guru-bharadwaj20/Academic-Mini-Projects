@@ -23,6 +23,11 @@ class ChatClient:
 
     MAX_FILE_SIZE = 2 * 1024 * 1024
 
+    # Cap the offline queue. It previously grew without limit while
+    # disconnected - including full 2 MB base64 file payloads - so a long
+    # outage exhausted memory.
+    MAX_PENDING_MESSAGES = 200
+
     def __init__(
         self,
         server_host: str = "localhost",
@@ -253,8 +258,19 @@ class ChatClient:
                 return
 
         with self.pending_lock:
+            dropped = 0
+            while len(self.pending_messages) >= self.MAX_PENDING_MESSAGES:
+                # Drop oldest first: the recent messages are the useful ones.
+                self.pending_messages.pop(0)
+                dropped += 1
             self.pending_messages.append(message)
             pending_count = len(self.pending_messages)
+
+        if dropped:
+            self._emit_system(
+                f"Offline queue full ({self.MAX_PENDING_MESSAGES}); "
+                f"discarded {dropped} oldest item(s)."
+            )
 
         self._emit(
             "buffered",
