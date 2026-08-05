@@ -260,6 +260,13 @@ const NODES = {
   SARJAPUR: { id: "SARJAPUR", label: "Sarjapur Road", lat: 12.9010, lng: 77.6850 },
 };
 
+// NOTE: EDGE_DEFINITIONS must contain each undirected road ONCE.
+// buildGraph() pushes BOTH directions for every entry, so a repeated pair
+// created parallel edges: the map drew duplicate lines, /analysis reported
+// E = 104 for a graph with 44 real edges (so density and average degree were
+// both more than 2x wrong), and HEBBAL<->RAJAJINAGAR was listed twice with
+// CONTRADICTORY weights (3.2km/17min vs 7.0km/19min), so the distance
+// Dijkstra used depended on which copy it relaxed first.
 const EDGE_DEFINITIONS = [
   ["PES_UNIVERSITY", "RAJAJINAGAR", 3.2, 10, 1.3],
   ["PES_UNIVERSITY", "YESHWANTHPUR", 4.5, 13, 1.1],
@@ -298,21 +305,13 @@ const EDGE_DEFINITIONS = [
   ["HEBBAL", "YELAHANKA", 8.0, 16, 1.1],
   ["HEBBAL", "YESHWANTHPUR", 5.5, 15, 1.2],
   ["HEBBAL", "RAJAJINAGAR", 6.0, 17, 1.3],
-  ["HEBBAL", "INDIRANAGAR", 9.5, 22, 1.3],
-  ["YELAHANKA", "KEMPEGOWDA_INTL", 8.5, 16, 1.0],
   ["YESHWANTHPUR", "RAJAJINAGAR", 3.5, 9, 1.2],
   ["YESHWANTHPUR", "BANASHANKARI", 9.5, 26, 1.3],
-  ["YESHWANTHPUR", "MAJESTIC", 4.0, 12, 1.3],
   ["JAYANAGAR", "BANASHANKARI", 4.5, 12, 1.2],
   ["JAYANAGAR", "HSR_LAYOUT", 6.5, 18, 1.4],
   ["JAYANAGAR", "SILK_BOARD", 5.0, 28, 2.4],
-  ["JAYANAGAR", "KORAMANGALA", 5.0, 15, 1.4],
   ["MARATHAHALLI", "SARJAPUR", 9.0, 22, 1.5],
-  ["MARATHAHALLI", "WHITEFIELD", 8.0, 18, 1.6],
   ["SILK_BOARD", "SARJAPUR", 7.0, 30, 2.2],
-  ["RAJAJINAGAR", "HEBBAL", 7.0, 19, 1.3],
-  ["BANASHANKARI", "ELECTRONIC_CITY", 12.0, 28, 1.2],
-  ["BANASHANKARI", "JAYANAGAR", 4.5, 12, 1.2],
 ];
 
 function buildGraph(weightType = "distance") {
