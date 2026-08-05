@@ -341,10 +341,13 @@ class ChatClient:
     def _handle_incoming_message(self, message: Dict):
         msg_type = message.get("type")
 
+        # Only messages that genuinely change OUR room may move us. TYPE_CHAT
+        # used to be in this list, so an incoming chat tagged with a different
+        # room silently relocated the client and the next thing it sent went
+        # to the wrong place.
         if msg_type in (
             MessageProtocol.TYPE_AUTH_OK,
             MessageProtocol.TYPE_ROOM_JOIN,
-            MessageProtocol.TYPE_CHAT,
         ):
             self.current_room = message.get("room", self.current_room)
 
