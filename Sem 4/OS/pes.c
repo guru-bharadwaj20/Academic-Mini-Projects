@@ -15,13 +15,13 @@
 
 // Usage: pes init
 int cmd_init(void) {
-    if (mkdir(PES_DIR, 0755) != 0 && access(PES_DIR, F_OK) != 0) {
+    if (pes_mkdir(PES_DIR) != 0 && access(PES_DIR, F_OK) != 0) {
         fprintf(stderr, "error: failed to create %s\n", PES_DIR);
         return 1;
     }
-    mkdir(OBJECTS_DIR, 0755);
-    mkdir(".pes/refs", 0755);
-    mkdir(REFS_DIR, 0755);
+    pes_mkdir(OBJECTS_DIR);
+    pes_mkdir(".pes/refs");
+    pes_mkdir(REFS_DIR);
 
     if (access(HEAD_FILE, F_OK) != 0) {
         FILE *f = fopen(HEAD_FILE, "w");

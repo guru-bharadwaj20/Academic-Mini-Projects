@@ -10,6 +10,48 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+// ─── Portability shims ──────────────────────────────────────────────────────
+//
+// The implementation files use POSIX mkdir(path, mode), lstat() and fsync(),
+// none of which exist in MinGW's headers - so the project could only ever be
+// compiled on Linux/macOS/WSL, and failed on Windows with:
+//
+//   error: too many arguments to function 'mkdir'; expected 1, have 2
+//   error: implicit declaration of function 'lstat'
+//   error: implicit declaration of function 'fsync'
+//
+// These wrappers keep a single spelling in the source and map it to whatever
+// the platform actually provides.
+
+#include <sys/stat.h>
+
+#ifdef _WIN32
+  #include <io.h>
+  #include <direct.h>
+
+  // Windows mkdir takes no mode argument; permissions come from ACLs.
+  static inline int pes_mkdir(const char *path) { return _mkdir(path); }
+
+  // No symbolic links to distinguish, so lstat and stat coincide.
+  #define lstat stat
+
+  // _commit() is the Windows equivalent of fsync().
+  static inline int fsync(int fd) { return _commit(fd); }
+
+  #ifndef S_IXUSR
+    #define S_IXUSR _S_IEXEC
+  #endif
+  #ifndef S_ISDIR
+    #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+  #endif
+  #ifndef S_ISREG
+    #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
+  #endif
+#else
+  #include <unistd.h>
+  static inline int pes_mkdir(const char *path) { return mkdir(path, 0755); }
+#endif
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 #define HASH_SIZE 32        // SHA-256 produces 32 bytes
