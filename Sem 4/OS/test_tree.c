@@ -168,8 +168,8 @@ static void test_long_name_rejected(void) {
 
 int main(void) {
     printf("=== Phase 2: tree object tests ===\n");
-    mkdir(PES_DIR, 0755);
-    mkdir(OBJECTS_DIR, 0755);
+    pes_mkdir(PES_DIR);
+    pes_mkdir(OBJECTS_DIR);
 
     test_roundtrip();
     test_sorted_output();

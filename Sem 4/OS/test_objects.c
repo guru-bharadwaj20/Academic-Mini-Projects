@@ -30,8 +30,8 @@ static int tests_failed = 0;
     } while (0)
 
 static void setup_repo(void) {
-    mkdir(PES_DIR, 0755);
-    mkdir(OBJECTS_DIR, 0755);
+    pes_mkdir(PES_DIR);
+    pes_mkdir(OBJECTS_DIR);
 }
 
 static void test_hex_roundtrip(void) {
