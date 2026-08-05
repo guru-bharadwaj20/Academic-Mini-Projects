@@ -16,6 +16,7 @@ Examples:
 import os
 import subprocess
 import sys
+from typing import Tuple
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from client.chat_client import ChatClientApp, TerminalChatClient
 
 
-def can_launch_gui() -> tuple[bool, str]:
+def can_launch_gui() -> Tuple[bool, str]:
     """Probe Tk in a child process so a native Tk crash cannot kill the main client."""
     probe_code = (
         "import tkinter as tk; "
@@ -32,11 +33,17 @@ def can_launch_gui() -> tuple[bool, str]:
         "root.update_idletasks(); "
         "root.destroy()"
     )
-    result = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        capture_output=True,
-        text=True,
-    )
+    # A bounded wait: without a timeout, a Tk installation that wedges
+    # instead of failing would hang the launcher indefinitely.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", probe_code],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "Tkinter probe timed out; falling back to terminal mode."
     if result.returncode == 0:
         return True, ""
 
