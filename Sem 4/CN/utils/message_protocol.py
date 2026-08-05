@@ -124,10 +124,22 @@ class MessageProtocol:
         """
         try:
             json_str = data.decode('utf-8').strip()
-            return json.loads(json_str)
+            message = json.loads(json_str)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"Error decoding message: {e}")
             return None
+
+        # json.loads happily returns a list, string, number, bool or None for
+        # perfectly valid JSON. Those all passed the except clauses above and
+        # were handed back to callers that immediately did message.get(...),
+        # raising AttributeError - which the receive loops caught with a
+        # blanket handler and turned into a dropped connection. A payload of
+        # just `123` was enough to disconnect a peer.
+        if not isinstance(message, dict):
+            print(f"Error decoding message: expected a JSON object, got {type(message).__name__}")
+            return None
+
+        return message
     
     @staticmethod
     def format_display_message(message: Dict) -> str:
