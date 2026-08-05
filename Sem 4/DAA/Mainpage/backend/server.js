@@ -201,18 +201,32 @@ kruskalRouter.post("/scalability", async (_req, res) => {
 
   for (const { V, E } of scenarios) {
     const edges = [];
-    const nodes = Array.from({ length: V }, (_, i) => i).sort(() => Math.random() - 0.5);
+
+    // Fisher-Yates. The previous `.sort(() => Math.random() - 0.5)` is the
+    // textbook-wrong shuffle: the comparator is inconsistent, which is
+    // undefined behaviour per the ECMAScript spec, and the permutation it
+    // produces is heavily biased. At V = 20000 it also burned ~280k
+    // comparisons to do a job that is O(n) swaps.
+    const nodes = Array.from({ length: V }, (_, i) => i);
+    for (let i = nodes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [nodes[i], nodes[j]] = [nodes[j], nodes[i]];
+    }
 
     for (let i = 0; i < V - 1; i++) {
       edges.push({ u: nodes[i], v: nodes[i + 1], cost: Math.floor(Math.random() * 490) + 10 });
     }
 
-    for (let k = 0; k < E - (V - 1); k++) {
+    // Retry on a self-loop instead of skipping. The old loop simply dropped
+    // the iteration when u === v, so the generated graph always had fewer
+    // edges than the scenario asked for - and the shortfall grew as V shrank.
+    let extra = E - (V - 1);
+    while (extra > 0) {
       const u = Math.floor(Math.random() * V);
       const v = Math.floor(Math.random() * V);
-      if (u !== v) {
-        edges.push({ u, v, cost: Math.floor(Math.random() * 490) + 10 });
-      }
+      if (u === v) continue;
+      edges.push({ u, v, cost: Math.floor(Math.random() * 490) + 10 });
+      extra--;
     }
 
     const cityNames = Array.from({ length: V }, (_, i) => `C${i}`);
