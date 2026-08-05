@@ -48,6 +48,9 @@ class ChatClient:
         self.connected = False
         self.session_ready = False
         self.manual_disconnect = False
+        # Set when the server rejects our credentials, so the reconnect loop
+        # stops instead of replaying them forever.
+        self.auth_rejected = False
         self.receive_thread = None
         self.reconnect_thread = None
         self.current_room = "lobby"
@@ -67,6 +70,7 @@ class ChatClient:
             return
         self.running = True
         self.manual_disconnect = False
+        self.auth_rejected = False
         self.reconnect_thread = threading.Thread(
             target=self._reconnect_loop,
             daemon=True,
@@ -328,8 +332,15 @@ class ChatClient:
         ):
             self.current_room = message.get("room", self.current_room)
 
+        if msg_type == MessageProtocol.TYPE_ERROR and not self.session_ready:
+            # An error before the session is established is a rejected login.
+            # Flag it so _reconnect_loop stops rather than replaying the same
+            # credentials every few seconds.
+            self.auth_rejected = True
+
         if msg_type == MessageProtocol.TYPE_AUTH_OK:
             self.session_ready = True
+            self.auth_rejected = False
             self._emit_status(
                 f"Connected as {self.username}. Current room: {self.current_room}"
             )
@@ -434,6 +445,15 @@ class ChatClient:
 
     def _reconnect_loop(self):
         while self.running:
+            if self.auth_rejected:
+                # The server refused these credentials. Retrying cannot help
+                # and only replays the same bad password every few seconds -
+                # a self-inflicted brute force that also trips the server's
+                # lockout. Stop and wait for the user to correct them.
+                self.running = False
+                self._emit_status("Sign-in failed. Check your details and reconnect.")
+                break
+
             if self.connected:
                 time.sleep(1)
                 continue
