@@ -85,8 +85,10 @@ function kruskal(vertices, edges, cityNames, options = {}) {
   const mstEdges = [];
   let totalCost = 0;
 
+  let edgesChecked = 0;
   for (const edge of sortedEdges) {
     const { u, v, cost } = edge;
+    edgesChecked++;
     const accepted = uf.union(u, v);
     if (includeSteps) {
       const step = {
@@ -114,7 +116,15 @@ function kruskal(vertices, edges, cityNames, options = {}) {
     totalCost,
     steps: includeSteps ? steps : [],
     isComplete,
-    edgesChecked: includeSteps ? steps.length : sortedEdges.length,
+    // Edges the algorithm actually examined before stopping. This used to be
+    //     includeSteps ? steps.length : sortedEdges.length
+    // so with tracing on it reported edges EXAMINED (the loop breaks once the
+    // MST is complete) but with tracing off it reported the TOTAL edge count.
+    // The Algorithm tab and the Scalability tab therefore showed the same
+    // label for two different quantities, and the scalability figure was
+    // always an overcount.
+    edgesChecked,
+    totalEdges: sortedEdges.length,
   };
 }
 
@@ -723,7 +733,10 @@ app.use("/api/kruskal", kruskalRouter);
 app.use("/api/dijkstra", dijkstraRouter);
 app.use("/api/dp", dpRouter);
 
-const PORT = 5000;
+// The other three backends all honour process.env.PORT; this one did not,
+// and its hardcoded 5000 is the same default Question-2 uses - so the two
+// could never run at the same time and the failure was a bare EADDRINUSE.
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`DSA portal backend running on http://localhost:${PORT}`);
 });
