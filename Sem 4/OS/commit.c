@@ -151,9 +151,15 @@ int commit_walk(commit_walk_fn callback, void *ctx) {
     return 0;
 }
 
+// Returns 0 on success, HEAD_NO_COMMITS if the branch simply has no commits
+// yet, and -1 if HEAD itself is missing or corrupt.
+//
+// This used to return -1 for BOTH "empty repository" and "I/O error", which
+// commit_create could not tell apart - so a corrupt or unreadable branch ref
+// silently produced a parentless root commit, orphaning all existing history.
 int head_read(ObjectID *id_out) {
     FILE *f = fopen(HEAD_FILE, "r");
-    if (!f) return -1;
+    if (!f) return -1;                       // no HEAD: repo not initialised
     char line[512];
     if (!fgets(line, sizeof(line), f)) { fclose(f); return -1; }
     fclose(f);
@@ -163,12 +169,17 @@ int head_read(ObjectID *id_out) {
     if (strncmp(line, "ref: ", 5) == 0) {
         snprintf(ref_path, sizeof(ref_path), "%s/%s", PES_DIR, line + 5);
         f = fopen(ref_path, "r");
-        if (!f) return -1;
-        if (!fgets(line, sizeof(line), f)) { fclose(f); return -1; }
+        // A symbolic HEAD pointing at a branch file that does not exist yet
+        // is the normal state of a freshly initialised repository.
+        if (!f) return HEAD_NO_COMMITS;
+        if (!fgets(line, sizeof(line), f)) { fclose(f); return HEAD_NO_COMMITS; }
         fclose(f);
         line[strcspn(line, "\r\n")] = '\0';
+        if (line[0] == '\0') return HEAD_NO_COMMITS;
     }
-    return hex_to_hash(line, id_out);
+
+    // Anything else that fails to parse is corruption, not emptiness.
+    return hex_to_hash(line, id_out) == 0 ? 0 : -1;
 }
 
 int head_update(const ObjectID *new_commit) {
@@ -218,13 +229,24 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     memset(&commit, 0, sizeof(commit));
     memcpy(commit.tree.hash, tree_id.hash, HASH_SIZE);
 
-    // Step 3: Read parent (may not exist for first commit)
+    // Step 3: Read parent (genuinely absent only for the first commit).
+    //
+    // This previously treated ANY head_read failure as "first commit". A
+    // corrupt or unreadable branch ref therefore produced a parentless root
+    // commit and silently orphaned every existing commit - the repository
+    // looked fine, but its whole history had been detached.
     ObjectID parent_id;
-    if (head_read(&parent_id) == 0) {
+    int head_status = head_read(&parent_id);
+    if (head_status == 0) {
         commit.has_parent = 1;
         memcpy(commit.parent.hash, parent_id.hash, HASH_SIZE);
-    } else {
+    } else if (head_status == HEAD_NO_COMMITS) {
         commit.has_parent = 0;
+    } else {
+        fprintf(stderr,
+                "error: cannot read HEAD - refusing to commit and orphan "
+                "existing history\n");
+        return -1;
     }
 
     // Step 4: Set author and timestamp

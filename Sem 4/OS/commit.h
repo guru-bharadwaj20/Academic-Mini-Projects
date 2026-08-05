@@ -40,10 +40,21 @@ int commit_walk(commit_walk_fn callback, void *ctx);
 
 // ─── HEAD helpers ───────────────────────────────────────────────────────────
 
+// Distinguishes "this branch has no commits yet" from a genuine failure.
+#define HEAD_NO_COMMITS 1
+
 // Read the commit hash that HEAD currently points to.
 // Follows symbolic refs: if HEAD contains "ref: refs/heads/main",
 // reads .pes/refs/heads/main to get the actual commit hash.
-// Returns 0 on success, -1 if no commits yet (empty repository).
+//
+// Returns:
+//    0                 success, *id_out is the current commit
+//    HEAD_NO_COMMITS   empty repository - HEAD is valid but the branch it
+//                      names has no commits yet
+//   -1                 HEAD is missing, unreadable or corrupt
+//
+// Callers MUST tell the last two apart: treating a corrupt ref as "empty"
+// makes the next commit a parentless root and orphans all history.
 int head_read(ObjectID *id_out);
 
 // Update HEAD (or the branch it points to) to a new commit hash.
