@@ -186,6 +186,8 @@ kruskalRouter.get("/analysis", (_req, res) => {
   });
 });
 
+let scalabilityRunning = false;
+
 kruskalRouter.post("/scalability", async (_req, res) => {
   const scenarios = [
     { V: 10, E: 40 },
@@ -195,11 +197,25 @@ kruskalRouter.post("/scalability", async (_req, res) => {
     { V: 20000, E: 300000 },
   ];
 
+  // Only one scalability run at a time. Each run is heavy CPU work on the
+  // single Node thread, so concurrent invocations queued behind each other
+  // and multiplied the stall - and the endpoint is unauthenticated.
+  if (scalabilityRunning) {
+    return res.status(429).json({ error: "A scalability run is already in progress." });
+  }
+  scalabilityRunning = true;
+
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
+  try {
   for (const { V, E } of scenarios) {
+    // Yield to the event loop BEFORE each scenario so pending requests to
+    // the other algorithm APIs get served. Previously the largest case
+    // (V=20000, E=300000) built and sorted 300k edges synchronously, which
+    // froze every other route on the server for the duration.
+    await new Promise((resolve) => setImmediate(resolve));
     const edges = [];
 
     // Fisher-Yates. The previous `.sort(() => Math.random() - 0.5)` is the
@@ -242,7 +258,10 @@ kruskalRouter.post("/scalability", async (_req, res) => {
     };
 
     res.write(`${JSON.stringify(row)}\n`);
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  } finally {
+    scalabilityRunning = false;
   }
 
   res.end();
