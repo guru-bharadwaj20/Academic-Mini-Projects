@@ -395,9 +395,20 @@ class ChatServer:
             if client.username and self.active_users.get(client.username) is client:
                 del self.active_users[client.username]
                 removed_user = True
-            if client.current_room in self.active_rooms:
-                self.active_rooms[client.current_room].discard(client)
-                print(f"[SERVER] Removed client. Active clients: {len(self.clients)}")
+
+            # Discard from EVERY room, not just current_room, and delete rooms
+            # once they are empty. active_rooms is a defaultdict that was only
+            # ever added to, so it grew a permanent entry for every room ever
+            # visited, each still holding references to dead handlers.
+            for room_name in list(self.active_rooms.keys()):
+                members = self.active_rooms[room_name]
+                members.discard(client)
+                if not members:
+                    del self.active_rooms[room_name]
+
+            # This log used to sit inside the `if current_room in active_rooms`
+            # block, so it only fired some of the time.
+            print(f"[SERVER] Removed client. Active clients: {len(self.clients)}")
 
         if removed_user:
             self.broadcast_user_list()
