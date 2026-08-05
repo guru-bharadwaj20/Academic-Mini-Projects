@@ -116,7 +116,11 @@ int index_load(Index *index) {
            file mtimes against garbage and reported clean files as
            modified. SCNu64/PRIu64 keep the width correct on every
            platform. */
-        int rc = fscanf(f, "%o %64s %" SCNu64 " %u %511s",
+        // "%511s" stops at the first whitespace, so `pes add "my file.txt"`
+        // stored only "my" and the index line no longer round-tripped. The
+        // path is the final field, so read it to the end of the line instead.
+        // The leading space in the format skips the separator.
+        int rc = fscanf(f, "%o %64s %" SCNu64 " %u %511[^\n]",
                         &e->mode, hex,
                         &e->mtime_sec, &e->size, e->path);
         if (rc != 5) break;
