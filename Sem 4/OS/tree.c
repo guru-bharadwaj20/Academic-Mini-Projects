@@ -124,6 +124,17 @@ static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID 
 
         char *slash = strchr(p, '/');
 
+        /* entries[] holds at most MAX_TREE_ENTRIES. Appending without this
+           check ran off the end of the Tree once a single directory held
+           more than 1024 entries. */
+        if (tree->count >= MAX_TREE_ENTRIES) {
+            fprintf(stderr,
+                    "error: directory has more than %d entries at depth %d\n",
+                    MAX_TREE_ENTRIES, depth);
+            free(tree);
+            return -1;
+        }
+
         if (!slash) {
             TreeEntry *entry = &tree->entries[tree->count];
             entry->mode = entries[i].mode;
