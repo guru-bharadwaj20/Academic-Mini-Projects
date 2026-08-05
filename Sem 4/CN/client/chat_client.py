@@ -275,6 +275,14 @@ class ChatClient:
             return False
 
     def _start_receiver(self):
+        # Join the previous receiver before replacing it. Overwriting
+        # self.receive_thread left the old thread blocked in readline() on a
+        # dead socket with nothing referencing it, so every reconnect leaked
+        # one thread for the life of the process.
+        previous = self.receive_thread
+        if previous is not None and previous.is_alive():
+            previous.join(timeout=2.0)
+
         self.receive_thread = threading.Thread(
             target=self._receive_messages,
             daemon=True,
