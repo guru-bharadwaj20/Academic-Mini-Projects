@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import hmac
 import os
@@ -10,13 +11,30 @@ class ChatDatabase:
     def __init__(self, db_path: str = "data/pulse_chat.db"):
         self.db_path = db_path
         self.lock = threading.Lock()
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        # dirname() is "" for a bare filename like "chat.db", and
+        # os.makedirs("") raises FileNotFoundError.
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _connect(self):
+        """Yield a connection and ALWAYS close it.
+
+        Every call site previously used `with self._connect() as conn:`.
+        For sqlite3, `with connection` is a TRANSACTION context manager - it
+        commits or rolls back, but it does NOT close. So each room listing,
+        saved message, login and history fetch leaked a connection and its
+        file descriptor until the garbage collector happened to run. On a
+        busy server that ends in "too many open files".
+        """
         connection = sqlite3.connect(self.db_path, check_same_thread=False)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            yield connection
+        finally:
+            connection.close()
 
     def _initialize(self):
         with self._connect() as connection:
