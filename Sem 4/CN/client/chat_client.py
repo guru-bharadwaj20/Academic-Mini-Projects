@@ -563,9 +563,13 @@ class TerminalChatClient:
         return username
 
     def _prompt_password(self) -> str:
-        password = getpass.getpass("Enter your password: ").strip()
+        # Do NOT strip: leading/trailing whitespace is part of the password.
+        # Stripping silently altered what the user typed, so a password with
+        # a trailing space could be set at registration and then never
+        # entered successfully again.
+        password = getpass.getpass("Enter your password: ")
         while not password:
-            password = getpass.getpass("Password cannot be empty. Try again: ").strip()
+            password = getpass.getpass("Password cannot be empty. Try again: ")
         return password
 
     def _handle_event(self, event_type: str, payload: Dict):
