@@ -158,6 +158,9 @@ app.post("/optimize", (req, res) => {
     baseDemandByDay: parsed.baseDemandByDay,
     priceSensitivity: parsed.priceSensitivity,
     memoryPenalty: parsed.memoryPenalty,
+    // Pass the tiers being optimised, so the demand model is anchored to
+    // them rather than to the module's default PRICE_TIERS.
+    prices: parsed.prices,
   });
 
   const result = optimizePricing({
