@@ -10,4 +10,7 @@
 # - json: Message serialization
 # - datetime: Timestamps
 #
-# Minimum Python version: 3.7
+# Minimum Python version: 3.9
+#   (3.9 is required for the builtin generic annotations used in
+#    run_client.py; the file previously claimed 3.7 while using
+#    syntax that raises TypeError on 3.7 and 3.8.)
