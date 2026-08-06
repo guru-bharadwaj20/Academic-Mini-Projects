@@ -160,9 +160,17 @@ def gram_schmidt(vectors):
     for v in vectors:
         w = v.copy().astype(float)
         for u in orthogonal:
-            # subtract projection of v onto u (removes the u-component from w)
-            w -= (np.dot(v, u) / np.dot(u, u)) * u
-        if np.linalg.norm(w) > 1e-10:   # skip near-zero (linearly dependent) vectors
+            # Project the RUNNING residual w, not the original v.
+            #
+            # This was CLASSICAL Gram-Schmidt (`np.dot(v, u)`), which loses
+            # orthogonality badly once the inputs are poorly scaled - and these
+            # are raw cricket statistics, with Runs in the thousands and Economy
+            # around 5. Modified Gram-Schmidt subtracts each component against
+            # the residual actually remaining, at no extra cost.
+            w = w - (np.dot(w, u) / np.dot(u, u)) * u
+        # Relative drop-threshold: these vectors are unnormalised and their
+        # magnitudes span orders of magnitude, so a fixed 1e-10 was arbitrary.
+        if np.linalg.norm(w) > 1e-10 * max(np.linalg.norm(v), 1.0):
             orthogonal.append(w)
     return np.array(orthogonal)
 
