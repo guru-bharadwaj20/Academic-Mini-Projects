@@ -180,8 +180,21 @@ def gram_schmidt(vectors):
             orthogonal.append(w)
     return np.array(orthogonal)
 
-# Use the first 5 player vectors as seeds (they live in 5D feature space)
-ortho_basis = gram_schmidt(A[:5])
+# Seed the orthogonalisation from Step 4's selected-feature matrix, so the
+# basis actually spans the retained feature space and Step 4's work is used.
+#
+# This used to be `gram_schmidt(A[:5])`, which read from the FULL feature set
+# regardless of what Step 4 selected: `basis` and `independent_features` were
+# computed, printed, and then never referenced again. Whenever Step 4 dropped
+# a dependent feature, Step 5 silently orthogonalised a different space from
+# the one Step 4 had just established.
+#
+# Seeds are player rows restricted to the selected columns, so these vectors
+# live in the selected-feature space - which is what Step 6 projects players
+# onto. Taking as many seeds as there are dimensions is what lets the result
+# span that space.
+n_dims = len(basis_cols)
+ortho_basis = gram_schmidt(basis[:n_dims])
 
 print("\n" + "=" * 65)
 print("STEP 5: ORTHOGONALIZATION — GRAM–SCHMIDT")
@@ -246,7 +259,8 @@ print("Projection scalars show how strongly each player aligns with")
 print("each independent performance direction:\n")
 
 for i in range(3):
-    player_vec = A[i]
+    # Restricted to the selected features, matching ortho_basis' space.
+    player_vec = basis[i]
     scalars = project_onto_basis(player_vec, ortho_basis)
     role = df["Role"].iloc[i]
     print(f"  Player {i+1} ({role}):")
@@ -254,9 +268,23 @@ for i in range(3):
         print(f"    onto u{j+1}: {s:.6f}")
     print()
 
-# Store all projections (used in Step 9)
-all_projections = np.array([project_onto_basis(A[i], ortho_basis)
-                             for i in range(len(A))])
+# Projection coordinates for every player in the orthogonal basis.
+#
+# The old comment claimed "(used in Step 9)", but Step 9 reduces dimensions
+# with A_centered @ top_eigvecs and never touched this array - it was computed
+# for all 100 players on every run and then discarded. It is now actually
+# consumed: reported here, and cross-checked in Step 9 against the eigenvector
+# projection so the two representations cannot silently diverge.
+all_projections = np.array([project_onto_basis(basis[i], ortho_basis)
+                            for i in range(len(basis))])
+
+print(f"Projection matrix computed for all {all_projections.shape[0]} players "
+      f"({all_projections.shape[1]} coordinates each).")
+reconstructed = all_projections @ ortho_basis
+projection_error = float(np.max(np.abs(reconstructed - basis)))
+print(f"Reconstruction check: max |players - projections @ basis| = "
+      f"{projection_error:.2e}  "
+      f"{'(exact, basis spans the space)' if projection_error < 1e-6 else '(BASIS DOES NOT SPAN)'}")
 
 print("→ NEXT: Use these projections + least squares to predict performance scores")
 
