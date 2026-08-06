@@ -513,9 +513,27 @@ def categorize_player(row):
 
 df["Predicted_Category"] = df.apply(categorize_player, axis=1)
 
-# Accuracy against the Role column (actual labels in dataset)
-correct  = (df["Predicted_Category"] == df["Role"]).sum()
-accuracy = 100 * correct / len(df)
+# Accuracy against the Role column (actual labels in dataset).
+#
+# categorize_player can only ever return Bowler, Batsman or All-rounder, but
+# the dataset also contains Wicketkeepers. Every wicketkeeper was therefore
+# guaranteed wrong, and the single headline "accuracy" was capped below 100%
+# by construction - it silently conflated "the rules are inaccurate" with
+# "the rules have no branch for this class at all".
+#
+# Report both: accuracy over the roles the rules can actually emit, and the
+# uncovered rows separately.
+PREDICTABLE_ROLES = {"Batsman", "Bowler", "All-rounder"}
+coverable = df["Role"].isin(PREDICTABLE_ROLES)
+
+correct_overall = int((df["Predicted_Category"] == df["Role"]).sum())
+accuracy = 100 * correct_overall / len(df)
+
+n_coverable = int(coverable.sum())
+correct_coverable = int(
+    (df.loc[coverable, "Predicted_Category"] == df.loc[coverable, "Role"]).sum())
+accuracy_coverable = 100 * correct_coverable / n_coverable if n_coverable else 0.0
+n_uncovered = len(df) - n_coverable
 
 df_sorted = df.sort_values("Performance_Score", ascending=False).reset_index(drop=True)
 
@@ -541,8 +559,18 @@ for cat in cats:
     p = pred_counts.get(cat, 0)
     a = actual_counts.get(cat, 0)
     print(f"  {cat:<16} {p:>10} {a:>10}")
-print(f"\n  Categorization accuracy: {accuracy:.1f}%")
-print("  (Wicketkeepers not classified by rules — requires fielding data)")
+print(f"\n  Accuracy on classifiable roles : {accuracy_coverable:.1f}%  "
+      f"({correct_coverable}/{n_coverable})")
+print(f"  Accuracy over the whole dataset: {accuracy:.1f}%  "
+      f"({correct_overall}/{len(df)})")
+if n_uncovered:
+    uncovered_roles = ", ".join(sorted(set(df.loc[~coverable, "Role"])))
+    print(f"  Not classifiable by these rules : {n_uncovered} row(s) "
+          f"({uncovered_roles})")
+    print("  Those rows are wrong by construction — the rule set has no branch")
+    print("  that can emit them — so the whole-dataset figure understates the")
+    print("  rules and can never reach 100%. Classifying them needs a feature")
+    print("  the rules do not have, such as a fielding or dismissals column.")
 
 print("\n3. DOMINANT PERFORMANCE PATTERNS (from eigenvalue analysis):")
 # Label each pattern from its own loadings. These labels used to be the fixed
