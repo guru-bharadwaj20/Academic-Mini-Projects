@@ -122,11 +122,30 @@ export default function App() {
   const [tab,   setTab]   = useState("route");
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  // Surfaces a failed graph load instead of leaving the UI silently empty.
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/nodes`).then(r => r.json()).then(setNodes);
-    fetch(`${API}/edges`).then(r => r.json()).then(setEdges);
+    fetch(`${API}/nodes`)
+      .then((r) => { if (!r.ok) throw new Error(`nodes: HTTP ${r.status}`); return r.json(); })
+      .then(setNodes)
+      .catch((err) => { console.error(err); setLoadError(String(err.message || err)); });
+    fetch(`${API}/edges`)
+      .then((r) => { if (!r.ok) throw new Error(`edges: HTTP ${r.status}`); return r.json(); })
+      .then(setEdges)
+      .catch((err) => { console.error(err); setLoadError(String(err.message || err)); });
   }, []);
+
+  // Surface a failed graph load; previously the fetch rejected silently
+  // and the UI just stayed empty with no explanation.
+  if (loadError) {
+    return (
+      <div style={{ padding: '2rem', color: '#f87171', fontFamily: 'system-ui, sans-serif' }}>
+        Could not reach the routing API: {loadError}. Is the backend running?
+      </div>
+    );
+  }
+
 
   return (
     <Shell>
