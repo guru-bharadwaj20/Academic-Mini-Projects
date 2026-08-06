@@ -48,15 +48,41 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
         commit_out->has_parent = 0;
     }
 
-    char author_buf[256];
-    uint64_t ts;
-    if (sscanf(p, "author %255[^\n]\n", author_buf) != 1) return -1;
-    char *last_space = strrchr(author_buf, ' ');
+    // The author line is "author <author> <timestamp>", and <author> alone may
+    // be up to 255 characters (PES_AUTHOR fills Commit.author[256]). Copying
+    // the whole line into a 256-byte scratch buffer first, as this used to do
+    // with sscanf("author %255[^\n]"), silently dropped whatever did not fit -
+    // and what does not fit is the *tail*, i.e. the timestamp. A 245-character
+    // author parsed as timestamp 170000000 instead of 1700000000 and still
+    // returned success, so `pes log` printed a 1975 date with no error. At 255
+    // characters no space survived the truncation and the commit became
+    // unreadable. Parse in place against the real line instead.
+    if (strncmp(p, "author ", 7) != 0) return -1;
+    const char *author_start = p + 7;
+    const char *eol = strchr(author_start, '\n');
+    if (!eol) return -1;
+
+    // Split on the last space before the newline; the tail is the timestamp.
+    const char *last_space = NULL;
+    for (const char *q = author_start; q < eol; q++) {
+        if (*q == ' ') last_space = q;
+    }
     if (!last_space) return -1;
-    ts = (uint64_t)strtoull(last_space + 1, NULL, 10);
-    *last_space = '\0';
-    snprintf(commit_out->author, sizeof(commit_out->author), "%s", author_buf);
-    commit_out->timestamp = ts;
+
+    // strtoull would quietly report 0 for a non-numeric or empty timestamp,
+    // which is indistinguishable from a genuine epoch-0 commit. Require at
+    // least one digit and nothing but digits up to the newline.
+    const char *ts_start = last_space + 1;
+    if (ts_start == eol) return -1;
+    for (const char *q = ts_start; q < eol; q++) {
+        if (*q < '0' || *q > '9') return -1;
+    }
+    commit_out->timestamp = (uint64_t)strtoull(ts_start, NULL, 10);
+
+    size_t author_len = (size_t)(last_space - author_start);
+    if (author_len >= sizeof(commit_out->author)) return -1;
+    memcpy(commit_out->author, author_start, author_len);
+    commit_out->author[author_len] = '\0';
 
     // Skip the author line, the committer line, and the blank separator.
     p = next_line(p);
