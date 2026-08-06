@@ -300,24 +300,69 @@ print("→ NEXT: Use these projections + least squares to predict performance sc
 # In a real system, b would come from actual match ratings or expert labels.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-b = (df["Runs"] * 0.4 +
-     df["Batting_Avg"] * 0.2 +
-     df["Strike_Rate"] * 0.1 +
-     df["Wickets"] * 0.2 -
-     df["Economy"] * 0.1).values
+# The target.
+#
+# This was a fixed linear combination of the SAME five columns that make up A:
+#
+#     b = 0.4*Runs + 0.2*Batting_Avg + 0.1*Strike_Rate + 0.2*Wickets - 0.1*Economy
+#
+# b therefore lay exactly in the column space of A, the system had an exact
+# zero-residual solution, and least squares simply recovered the five weights
+# written on this line. The "Optimal coefficient weights per feature" output
+# was a restatement of the input, and the demonstration was circular - it
+# could not fail, and showed nothing about fitting.
+#
+# Kept as the reference target for continuity with the report, but the
+# circularity is now measured and stated rather than hidden, and the fit is
+# also evaluated on a held-out split so the reported error means something.
+TARGET_WEIGHTS = {"Runs": 0.4, "Batting_Avg": 0.2, "Strike_Rate": 0.1,
+                  "Wickets": 0.2, "Economy": -0.1}
+b = sum(df[feat] * w for feat, w in TARGET_WEIGHTS.items()).values
 
-x_hat = np.linalg.inv(A.T @ A) @ A.T @ b
+# lstsq solves the least-squares problem directly via QR/SVD.
+#
+# The old `np.linalg.inv(A.T @ A) @ A.T @ b` forms the normal equations
+# explicitly, which SQUARES the condition number of A, and raises LinAlgError
+# outright if A.T @ A is singular - with no guard, on data whose rank the
+# script had just finished measuring.
+x_hat, residuals, lstsq_rank, singular_values = np.linalg.lstsq(A, b, rcond=None)
 predicted_scores = A @ x_hat
 df["Performance_Score"] = predicted_scores
+
+# Honest error reporting, in-sample and held-out.
+train_error = float(np.sqrt(np.mean((A @ x_hat - b) ** 2)))
+split = int(0.7 * len(A))
+x_train, _, _, _ = np.linalg.lstsq(A[:split], b[:split], rcond=None)
+holdout_error = float(np.sqrt(np.mean((A[split:] @ x_train - b[split:]) ** 2)))
+condition_number = float(np.linalg.cond(A))
 
 print("\n" + "=" * 65)
 print("STEP 7: PREDICTION — LEAST SQUARES SOLUTION")
 print("=" * 65)
-print("Formula: x̂ = (AᵀA)⁻¹ Aᵀ b\n")
-print("Optimal coefficient weights per feature:")
+print("Solved with np.linalg.lstsq (QR/SVD), not the normal equations.\n")
+print("Fitted coefficient weights, against the weights used to build b:")
+print(f"  {'feature':15s} {'fitted':>12s} {'target':>10s} {'error':>12s}")
+print("  " + "-" * 52)
 for feat, coef in zip(features, x_hat):
-    print(f"  {feat:15s}: {coef:.6f}")
+    target = TARGET_WEIGHTS[feat]
+    print(f"  {feat:15s} {coef:12.6f} {target:10.4f} {abs(coef - target):12.2e}")
+
 print(f"\nPredicted scores range: {predicted_scores.min():.2f} to {predicted_scores.max():.2f}")
+print(f"Condition number of A     : {condition_number:.2e}")
+print(f"In-sample RMSE            : {train_error:.2e}")
+print(f"Held-out RMSE (30% split) : {holdout_error:.2e}")
+print(f"Effective rank from SVD   : {lstsq_rank}")
+
+# State the circularity outright rather than presenting a tautology as a result.
+if train_error < 1e-6:
+    print("\nNOTE: b was constructed as a fixed linear combination of these same")
+    print("five columns, so it lies exactly in the column space of A. The system")
+    print("has an exact solution, least squares recovers the defining weights to")
+    print("machine precision, and the residual is zero by construction. This")
+    print("demonstrates that the solver is correct - it does NOT demonstrate")
+    print("predictive power. A genuine evaluation needs a target measured")
+    print("independently of these features, such as expert ratings or match")
+    print("outcomes.")
 print("\n→ NEXT: Compute eigenvalues to discover dominant patterns in player data")
 
 
