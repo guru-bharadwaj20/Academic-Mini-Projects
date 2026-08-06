@@ -3,7 +3,7 @@
 A secure, multi-client chat server implementation using Python with SSL/TLS encryption over TCP. This project demonstrates core networking concepts including socket programming, TLS encryption, concurrent client handling, and message broadcasting.
 
 **Built for:** Computer Networks Course Project  
-**Language:** Python 3.7+  
+**Language:** Python 3.9+  
 **Dependencies:** Standard library only (socket, ssl, threading, json)
 
 ---
@@ -107,7 +107,10 @@ Pulse-Chat/
 
 **4. Database (`server/chat_database.py`)**
 - Stores users, rooms, and chat history in SQLite
-- Creates accounts on first login
+- Creates accounts only when registration is explicitly requested
+  (the auth frame carries a `register` flag; CLI prompts, GUI has a
+  "New account" checkbox). An unknown username is rejected, not
+  silently registered.
 - Validates returning users by password
 - Loads recent room history on login and room changes
 
@@ -125,7 +128,9 @@ Pulse-Chat/
 
 **SSL/TLS** (Secure Sockets Layer / Transport Layer Security) provides:
 - **Encryption:** Data transmitted is encrypted, preventing eavesdropping
-- **Authentication:** Server identity is verified through certificates
+- **Authentication:** Server identity is verified through certificates -
+  which requires the client to actually verify them, and the certificate to
+  carry a subjectAltName
 - **Integrity:** Data cannot be tampered with during transmission
 
 ### How it Works in This Project
@@ -140,7 +145,10 @@ Pulse-Chat/
    - Client creates SSL context
    - Client wraps its socket with SSL
    - Connects to server (TLS handshake)
-   - For self-signed certs, certificate verification is disabled
+   - Pins the server's self-signed certificate as its trust anchor and
+     verifies the hostname against the certificate's subjectAltName.
+     Verification is NOT disabled: without it the channel is encrypted but
+     unauthenticated, and any MITM can present its own certificate.
 
 ### Self-Signed Certificates
 
@@ -155,7 +163,7 @@ For this educational project, we use **self-signed certificates**:
 
 ### Prerequisites
 
-- Python 3.7 or higher
+- Python 3.9 or higher (run_client.py uses builtin generic annotations)
 - OpenSSL (usually pre-installed on macOS/Linux)
 
 ### Step 1: Generate SSL Certificates
@@ -172,13 +180,22 @@ Or manually using OpenSSL:
 ```bash
 cd certs
 
-# Generate private key and certificate
+# Generate private key and certificate.
+# subjectAltName is REQUIRED - Python 3.7+ ignores the legacy CN field when
+# matching a hostname, so a CN-only certificate can never be verified and the
+# client would have to disable verification entirely to connect.
 openssl req -x509 -newkey rsa:2048 \
     -keyout server.key \
     -out server.crt \
     -days 365 \
     -nodes \
-    -subj "/C=US/ST=State/L=City/O=PulseChat/OU=Development/CN=localhost"
+    -subj "/C=IN/ST=Karnataka/L=Bangalore/O=Pulse-Chat/OU=Development/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1,IP:::1" \
+    -addext "basicConstraints=critical,CA:TRUE" \
+    -addext "keyUsage=critical,digitalSignature,keyCertSign"
+
+# Confirm the SAN is present - the client matches against this, not CN
+openssl x509 -in server.crt -noout -ext subjectAltName
 
 # Set appropriate permissions
 chmod 600 server.key
@@ -193,6 +210,8 @@ chmod 644 server.crt
 - `-days 365`: Certificate valid for 1 year
 - `-nodes`: Don't encrypt the private key (no passphrase)
 - `-subj`: Certificate subject information
+- `-addext subjectAltName`: the names this certificate is valid for. The
+  client verifies the hostname against THIS, not against CN.
 
 ### Step 2: Start the Server
 

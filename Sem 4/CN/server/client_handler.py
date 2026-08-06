@@ -75,10 +75,12 @@ class ClientHandler:
         This runs in a separate thread for each client.
         
         Process:
-        1. Wait for username from client
-        2. Announce client join to all users
-        3. Loop: receive messages and broadcast them
-        4. Handle disconnection gracefully
+        1. Authenticate: read one auth frame (username + password, and an
+           explicit `register` flag for account creation)
+        2. Send session state: auth_ok, room history, online users
+        3. Announce the join to the client's room
+        4. Loop: receive framed messages and dispatch them
+        5. Handle disconnection gracefully
         """
         try:
             # Use makefile() to create a file-like object for line-based reading

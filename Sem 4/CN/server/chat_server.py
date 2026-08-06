@@ -10,7 +10,10 @@ This is the main server implementation that:
 
 Key Networking Concepts:
 - TCP Socket: Reliable, connection-oriented communication
-- SSL/TLS: Encrypts data in transit, authenticates server identity
+- SSL/TLS: Encrypts data in transit AND authenticates the server. The client
+  pins the server's self-signed certificate and verifies the hostname against
+  its subjectAltName; without that the connection is encrypted but
+  unauthenticated, which is what a MITM needs.
 - Server Socket: Listens for incoming connections (accept)
 - Thread Safety: Uses locks to protect shared data structures
 """

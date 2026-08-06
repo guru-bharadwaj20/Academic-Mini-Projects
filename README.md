@@ -12,8 +12,11 @@ Quick start
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # Linux/macOS
-.venv\Scripts\activate    # Windows PowerShell
-pip install -r "Sem 4/CN/requirements.txt"  # if needed
+.venv\Scripts\activate      # Windows PowerShell
+
+# CN needs no third-party packages - standard library only (Python 3.9+).
+# LAA does need them:
+pip install -r "Sem 4/LAA/requirements.txt"
 ```
 
 - Node frontends/backends (DAA):
@@ -24,12 +27,17 @@ npm install
 npm run dev
 ```
 
-- C projects (OS, DSA): build with `make` or `gcc` where Makefile exists.
+- C projects (OS, DSA): build with `make` or `gcc` where a Makefile exists.
 
 ```bash
+# OS (PES-VCS) - needs OpenSSL headers (-lcrypto)
 cd "Sem 4/OS"
-make
-./test_objects
+make            # builds ./pes
+make test       # unit tests + integration script
+
+# DSA
+cd "Sem 3/DSA"
+gcc main.c symptom_checker.c -o symptom_checker
 ```
 
 Repository license

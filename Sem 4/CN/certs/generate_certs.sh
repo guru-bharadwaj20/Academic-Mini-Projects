@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "CORDDISS chat Certificate"
+echo "Pulse-Chat Certificate Generation"
 echo
 
 if ! command -v openssl &> /dev/null; then
