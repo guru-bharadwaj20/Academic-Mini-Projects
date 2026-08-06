@@ -379,19 +379,44 @@ print("\n→ NEXT: Compute eigenvalues to discover dominant patterns in player d
 
 A_centered = A - A.mean(axis=0)          # subtract mean of each feature column
 n = A.shape[0]
-C = (A_centered.T @ A_centered) / (n - 1)   # true covariance matrix (5×5)
 
-eigenvalues, eigenvectors = np.linalg.eig(C)
+# STANDARDISE, not just centre.
+#
+# Centring alone leaves each feature on its own scale, and these scales differ
+# by orders of magnitude: Runs is in the thousands, Economy is around 5. The
+# covariance matrix is then dominated by whichever column happens to carry the
+# largest units, so "Pattern 1 is driven almost entirely by Runs" was not a
+# discovery about cricket - it was a restatement of the fact that Runs has the
+# biggest numbers. On the raw covariance, Pattern 1 absorbed 99.7% of variance.
+#
+# Dividing by the per-feature standard deviation makes the analysis
+# scale-invariant: this is PCA on the CORRELATION matrix, which is the correct
+# choice whenever features are measured in different units.
+A_std = A.std(axis=0, ddof=1)
+A_std_safe = np.where(A_std > 0, A_std, 1.0)   # guard constant columns
+A_scaled = A_centered / A_std_safe
+C = (A_scaled.T @ A_scaled) / (n - 1)          # correlation matrix (5×5)
 
-# Sort by descending eigenvalue (largest = most dominant pattern)
-sorted_idx = np.argsort(eigenvalues.real)[::-1]
-eigenvalues  = eigenvalues[sorted_idx].real
-eigenvectors = eigenvectors[:, sorted_idx].real
+# eigh, not eig.
+#
+# C is symmetric by construction. np.linalg.eig is the general solver: it
+# returns complex dtype (so the old code stripped `.real` without ever checking
+# the imaginary parts were negligible) and does not guarantee orthonormal
+# eigenvectors - which the C = P D Pᵀ reconstruction in Step 9 silently
+# depends on, and which fails for repeated eigenvalues. eigh exploits the
+# symmetry: real eigenvalues, guaranteed orthonormal eigenvectors, ascending
+# order, and it is faster.
+eigenvalues, eigenvectors = np.linalg.eigh(C)
+
+# eigh returns ascending; flip to descending (largest = most dominant pattern)
+sorted_idx = np.argsort(eigenvalues)[::-1]
+eigenvalues  = eigenvalues[sorted_idx]
+eigenvectors = eigenvectors[:, sorted_idx]
 
 print("\n" + "=" * 65)
 print("STEP 8: PATTERN DISCOVERY — EIGENVALUES & EIGENVECTORS")
 print("=" * 65)
-print("Covariance matrix C = (A − Ā)ᵀ(A − Ā) / (n−1)  [5×5]:")
+print("Correlation matrix C = standardised(A)ᵀ standardised(A) / (n−1)  [5×5]:")
 print(np.round(C, 2))
 print("\nEigenvalues (sorted descending — dominant patterns first):")
 total_var = eigenvalues.sum()
@@ -403,8 +428,24 @@ for i, val in enumerate(eigenvalues):
 print("\nDominant eigenvector (Pattern 1 — strongest trend in data):")
 for feat, comp in zip(features, eigenvectors[:, 0]):
     print(f"  {feat:15s}: {comp:+.4f}")
-print("\nPattern 1 is driven almost entirely by Runs → batting volume")
-print("is the single strongest differentiator among players.")
+# Describe the pattern the eigenvector ACTUALLY has. This used to be the fixed
+# sentence "Pattern 1 is driven almost entirely by Runs -> batting volume is the
+# single strongest differentiator", printed regardless of the numbers. It was
+# only ever true because the features were unstandardised; on the correlation
+# matrix Pattern 1 turns out to load on Wickets and Economy, not Runs.
+def describe_pattern(vec, feature_names, threshold=0.35):
+    """Name the features a component actually loads on, with direction."""
+    strong = [(feature_names[i], vec[i]) for i in range(len(vec))
+              if abs(vec[i]) >= threshold]
+    strong.sort(key=lambda kv: -abs(kv[1]))
+    if not strong:
+        return "no single feature dominates (all loadings below threshold)"
+    return ", ".join(f"{name} ({'+' if val > 0 else '-'}{abs(val):.2f})"
+                     for name, val in strong)
+
+
+print(f"\nPattern 1 loads on: {describe_pattern(eigenvectors[:, 0], features)}")
+print(f"It accounts for {100 * eigenvalues[0] / total_var:.1f}% of the standardised variance.")
 print("\n→ NEXT: Use eigenvectors to simplify the system (diagonalization)")
 
 
@@ -420,7 +461,10 @@ print("\n→ NEXT: Use eigenvectors to simplify the system (diagonalization)")
 
 k = 2                                     # keep top 2 dominant directions
 top_eigvecs = eigenvectors[:, :k]         # 5 × 2
-A_reduced   = A_centered @ top_eigvecs    # 100 × 2  (reduced player space)
+A_reduced   = A_scaled @ top_eigvecs      # 100 x 2  (reduced player space)
+# Projects the STANDARDISED data, matching the correlation matrix the
+# eigenvectors came from. Using A_centered here would have mixed a raw-scale
+# projection with a standardised basis.
 
 # Verify diagonalization: C = P D Pᵀ
 D = np.diag(eigenvalues)
@@ -435,7 +479,13 @@ print(f"Reduced from {A.shape[1]} features → {k} dominant performance patterns
 print(f"Variance retained by top {k} patterns: "
       f"{100 * eigenvalues[:k].sum() / total_var:.1f}%")
 print(f"\nDiagonalization verification: C = P·D·Pᵀ")
-print(f"  Max reconstruction error: {reconstruction_error:.2e}  ✓ (≈ 0, confirms C is diagonalizable)")
+# eigh guarantees an orthonormal P, so P·D·Pᵀ is exact here. With the old
+# np.linalg.eig this identity held only by luck - eig does not promise
+# orthonormal eigenvectors, and it breaks for repeated eigenvalues.
+_diag_ok = reconstruction_error < 1e-8
+print(f"  Max reconstruction error: {reconstruction_error:.2e}  "
+      f"{'(≈ 0, C is diagonalisable and P is orthonormal)' if _diag_ok else '(TOO LARGE - P is not orthonormal)'}")
+print(f"  Orthonormality of P: max |PᵀP - I| = {np.max(np.abs(P.T @ P - np.eye(len(P)))):.2e}")
 print(f"\nPlayers in reduced 2D performance space (first 10):")
 print(f"  {'Name':<12} {'Role':<15} {'Pattern1':>10} {'Pattern2':>10}")
 print("  " + "─" * 50)
@@ -495,15 +545,25 @@ print(f"\n  Categorization accuracy: {accuracy:.1f}%")
 print("  (Wicketkeepers not classified by rules — requires fielding data)")
 
 print("\n3. DOMINANT PERFORMANCE PATTERNS (from eigenvalue analysis):")
+# Label each pattern from its own loadings. These labels used to be the fixed
+# strings "dominant batting pattern" and "bowling/batting contrast", attached to
+# components 1 and 2 by position no matter what those components contained.
 for i in range(len(eigenvalues)):
     pct = 100 * eigenvalues[i] / total_var
-    print(f"  Pattern {i+1}: {pct:.1f}% of variance  "
-          f"{'← dominant batting pattern' if i == 0 else '← bowling/batting contrast' if i == 1 else ''}")
+    print(f"  Pattern {i+1}: {pct:5.1f}% of variance  <- "
+          f"{describe_pattern(eigenvectors[:, i], features)}")
+
 print(f"\n  Top 2 patterns together explain "
       f"{100 * eigenvalues[:2].sum() / total_var:.1f}% of all variation.")
-print("\n  Conclusion: Batting volume (Runs) is the primary differentiator")
-print("  among players. Secondary pattern captures the batting vs bowling")
-print("  trade-off, which distinguishes All-rounders from specialists.")
+
+# Conclusion derived from the leading component rather than asserted.
+lead_order = np.argsort(-np.abs(eigenvectors[:, 0]))
+primary, secondary = features[lead_order[0]], features[lead_order[1]]
+print(f"\n  Conclusion: the strongest axis of variation is driven mainly by "
+      f"{primary} and {secondary}.")
+print("  This is computed on STANDARDISED features, so it reflects genuine")
+print("  correlation structure rather than differences in the units each")
+print("  statistic happens to be measured in.")
 print("\n" + "=" * 65)
 print("Pipeline complete: Real-world data → Matrix → RREF → Vector Spaces")
 print("→ Basis → Gram–Schmidt → Projection → Least Squares → Eigenvalues")
