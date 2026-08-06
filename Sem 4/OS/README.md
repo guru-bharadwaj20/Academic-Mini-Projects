@@ -30,6 +30,10 @@ The following core modules have been implemented as part of the project:
 Use the following commands to build and validate the project:
 
 ```bash
+# Requires OpenSSL development headers (the build links -lcrypto):
+#   Debian/Ubuntu : sudo apt install libssl-dev
+#   macOS         : brew install openssl
+#   Windows       : MSYS2/mingw-w64 openssl package
 make
 make all
 make clean

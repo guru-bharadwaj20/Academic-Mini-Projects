@@ -63,10 +63,12 @@ gtkwave multiplier.vcd
 
 #### 📂 Structure
 ```bash
-DSA/
-│── main.c                 # CLI & user interface
-│── symptom_checker.c      # Core logic and sorting
-└── symptom_checker.h      # Data structures & declarations
+DDCO/
+│── sbm.v                  # RTL: FSM-controlled shift-and-add multiplier
+│── sbm_tb.v               # Self-checking testbench (exhaustive 4x4 sweep)
+│── Circuit Diagram.jpg    # Block diagram
+│── Code Output.png        # Simulation console output
+└── GTKWave Screenshot.png # Waveform capture
 ```
 
 ---
