@@ -152,24 +152,30 @@ print("\n→ NEXT: Convert this basis into mutually orthogonal vectors (Gram–S
 
 def gram_schmidt(vectors):
     """
-    Gram-Schmidt orthogonalization.
-    Input:  list of row vectors (numpy arrays of same length)
-    Output: list of mutually orthogonal vectors (same span)
+    Modified Gram-Schmidt orthogonalization.
+
+    Input:  array of row vectors (same length)
+    Output: array of mutually orthogonal vectors spanning the same space
+
+    This was CLASSICAL Gram-Schmidt, which subtracted the projection of the
+    ORIGINAL vector v:
+
+        w -= (np.dot(v, u) / np.dot(u, u)) * u        # v, not w
+
+    Classical GS loses orthogonality badly once the inputs are poorly scaled,
+    and these are raw cricket statistics where Runs is in the thousands while
+    Economy is around 5. Projecting the progressively updated w instead
+    (modified GS) subtracts each component against the residual actually
+    remaining, which is far more numerically stable at no extra cost.
     """
     orthogonal = []
     for v in vectors:
         w = v.copy().astype(float)
         for u in orthogonal:
             # Project the RUNNING residual w, not the original v.
-            #
-            # This was CLASSICAL Gram-Schmidt (`np.dot(v, u)`), which loses
-            # orthogonality badly once the inputs are poorly scaled - and these
-            # are raw cricket statistics, with Runs in the thousands and Economy
-            # around 5. Modified Gram-Schmidt subtracts each component against
-            # the residual actually remaining, at no extra cost.
             w = w - (np.dot(w, u) / np.dot(u, u)) * u
-        # Relative drop-threshold: these vectors are unnormalised and their
-        # magnitudes span orders of magnitude, so a fixed 1e-10 was arbitrary.
+        # Scale the drop-threshold to the input, so it means "negligible
+        # relative to where we started" rather than an absolute 1e-10.
         if np.linalg.norm(w) > 1e-10 * max(np.linalg.norm(v), 1.0):
             orthogonal.append(w)
     return np.array(orthogonal)
@@ -185,12 +191,37 @@ print("Orthogonal basis vectors (first 5 values shown per vector):")
 for i, vec in enumerate(ortho_basis):
     print(f"  u{i+1}: {np.round(vec[:5], 4)}")
 
-print("\nVerification — dot products must be ≈ 0 (orthogonality check):")
-print(f"  u1 · u2 = {np.dot(ortho_basis[0], ortho_basis[1]):.8f}  ✓")
-print(f"  u1 · u3 = {np.dot(ortho_basis[0], ortho_basis[2]):.8f}  ✓")
-print(f"  u2 · u3 = {np.dot(ortho_basis[1], ortho_basis[2]):.8f}  ✓")
-print("\nOrthogonal basis successfully formed — each vector is an independent")
-print("performance direction with zero overlap with the others.")
+# Check EVERY pair, and derive the verdict from the numbers.
+#
+# This block used to hardcode three "✓" marks in the format strings, so it
+# printed a pass regardless of what the dot products actually were. It also
+# indexed ortho_basis[0..2] unconditionally, which raises IndexError whenever
+# gram_schmidt drops a near-dependent vector and returns fewer than three.
+#
+# The tolerance is relative: these vectors are unnormalised and their
+# magnitudes span several orders of magnitude, so a fixed absolute epsilon
+# would be meaningless.
+print("\nVerification — all pairwise dot products must be ≈ 0:")
+max_relative_overlap = 0.0
+n_vectors = len(ortho_basis)
+if n_vectors < 2:
+    print(f"  Only {n_vectors} vector(s) produced — nothing to cross-check.")
+else:
+    for i in range(n_vectors):
+        for j in range(i + 1, n_vectors):
+            dot = float(np.dot(ortho_basis[i], ortho_basis[j]))
+            scale = np.linalg.norm(ortho_basis[i]) * np.linalg.norm(ortho_basis[j])
+            relative = abs(dot) / scale if scale > 0 else 0.0
+            max_relative_overlap = max(max_relative_overlap, relative)
+            status = "ok" if relative < 1e-8 else "NOT ORTHOGONAL"
+            print(f"  u{i+1} · u{j+1} = {dot:>14.8f}   relative = {relative:.2e}  {status}")
+
+    if max_relative_overlap < 1e-8:
+        print(f"\nOrthogonal basis verified — largest relative overlap "
+              f"{max_relative_overlap:.2e} across all {n_vectors * (n_vectors - 1) // 2} pairs.")
+    else:
+        print(f"\nWARNING: basis is NOT orthogonal to tolerance — largest relative "
+              f"overlap {max_relative_overlap:.2e}.")
 print("\n→ NEXT: Project player vectors onto this orthogonal basis")
 
 
