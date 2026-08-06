@@ -56,19 +56,32 @@ print("\n→ NEXT: We simplify this matrix to understand its structure (RREF)")
 # and whether any features carry redundant information (free columns).
 # ═══════════════════════════════════════════════════════════════════════════════
 
-A_sym = Matrix(A[:10].tolist())   # use 10 rows — sympy is exact but slow on 100
-rref_matrix, pivot_cols = A_sym.rref()
-rank = len(pivot_cols)
+# RREF on a 10-row SAMPLE, purely to display an exact reduced form (sympy is
+# exact but slow on all 100 rows). Its pivot count describes THAT SAMPLE only.
+SAMPLE_ROWS = 10
+A_sym = Matrix(A[:SAMPLE_ROWS].tolist())
+rref_matrix, sample_pivots = A_sym.rref()
+sample_rank = len(sample_pivots)
+
+# The rank of the FULL matrix, which is what every later step actually needs.
+# `rank` used to be the 10-row sample's pivot count, then reported and reused
+# throughout as though it described all 100 players.
+rank = int(np.linalg.matrix_rank(A))
+pivot_cols = sample_pivots
 
 print("\n" + "=" * 65)
 print("STEP 2: MATRIX SIMPLIFICATION (RREF / GAUSSIAN ELIMINATION)")
 print("=" * 65)
-print("RREF of first 10 rows:")
+print(f"RREF of first {SAMPLE_ROWS} rows:")
 print(rref_matrix)
-print(f"\nPivot columns (independent features): {pivot_cols}")
-print(f"Rank of matrix: {rank}")
-print(f"Interpretation: Rank = {rank} means all {rank} features are "
-      f"linearly independent — no feature is a combination of the others.")
+print(f"\nPivot columns of the {SAMPLE_ROWS}-row sample: {sample_pivots} (rank {sample_rank})")
+print(f"Rank of the FULL {A.shape[0]}x{A.shape[1]} matrix: {rank}")
+if rank == A.shape[1]:
+    print(f"Interpretation: rank = {rank} = number of features, so all {rank} "
+          f"features are linearly independent — none is a combination of the others.")
+else:
+    print(f"Interpretation: rank = {rank} < {A.shape[1]} features, so "
+          f"{A.shape[1] - rank} feature(s) are linearly dependent on the rest.")
 print("\n→ NEXT: We study the vector spaces (row, column, null) formed by A")
 
 
@@ -79,8 +92,13 @@ print("\n→ NEXT: We study the vector spaces (row, column, null) formed by A")
 # Null space  → hidden linear relationships among features (if any)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-nullity = A.shape[1] - rank
+# Both now derive from the FULL matrix. `nullity` used to be computed from the
+# 10-row sample's rank while `null_basis` came from all 100 rows, so the two
+# values printed side by side could contradict each other.
 null_basis = la.null_space(A)
+nullity = A.shape[1] - rank
+assert nullity == null_basis.shape[1], (
+    f"rank-nullity mismatch: {nullity} vs {null_basis.shape[1]}")
 
 print("\n" + "=" * 65)
 print("STEP 3: STRUCTURE OF THE VECTOR SPACE")
@@ -112,7 +130,15 @@ print(f"Pivot column indices: {basis_cols}")
 print(f"Linearly independent features: {independent_features}")
 print(f"Basis matrix (first 5 rows):")
 print(pd.DataFrame(basis[:5], columns=independent_features).to_string(index=False))
-print(f"\nAll {len(basis_cols)} features retained — none are redundant.")
+# Report what actually happened instead of printing a fixed conclusion. This
+# line asserted "none are redundant" unconditionally, so on a dataset where
+# features WERE dropped it directly contradicted the line above it.
+if len(basis_cols) == A.shape[1]:
+    print(f"\nAll {len(basis_cols)} features retained — none are redundant.")
+else:
+    dropped = [features[i] for i in range(A.shape[1]) if i not in basis_cols]
+    print(f"\n{len(basis_cols)} of {A.shape[1]} features retained; "
+          f"dropped as linearly dependent: {dropped}")
 print("\n→ NEXT: Convert this basis into mutually orthogonal vectors (Gram–Schmidt)")
 
 
