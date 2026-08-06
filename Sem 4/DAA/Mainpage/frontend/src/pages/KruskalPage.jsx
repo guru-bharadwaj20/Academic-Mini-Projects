@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import ErrorBoundary from "../ErrorBoundary.jsx";
 import KruskalApp from "../kruskal/KruskalApp.jsx";
 
 const kruskalTheme = {
@@ -33,7 +34,7 @@ export default function KruskalPage() {
       <Link to="/" className="back-portal-btn">
         &larr; Back to Portal
       </Link>
-      <KruskalApp />
+      <ErrorBoundary label="KruskalApp"><KruskalApp /></ErrorBoundary>
     </div>
   );
 }

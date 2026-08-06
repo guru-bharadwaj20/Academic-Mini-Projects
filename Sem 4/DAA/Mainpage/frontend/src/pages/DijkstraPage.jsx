@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import ErrorBoundary from "../ErrorBoundary.jsx";
 import DijkstraApp from "../dijkstra/DijkstraApp.jsx";
 
 const dijkstraTheme = {
@@ -21,7 +22,7 @@ export default function DijkstraPage() {
       <Link to="/" className="back-portal-btn">
         &larr; Back to Portal
       </Link>
-      <DijkstraApp />
+      <ErrorBoundary label="DijkstraApp"><DijkstraApp /></ErrorBoundary>
     </div>
   );
 }

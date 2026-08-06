@@ -3,11 +3,17 @@ import { Card } from '../KruskalApp.jsx';
 
 export default function AnalysisTab({ api }) {
   const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`${api}/analysis`).then(r => r.json()).then(setData);
+    fetch(`${api}/analysis`)
+      .then((r) => { if (!r.ok) throw new Error(`analysis: HTTP ${r.status}`); return r.json(); })
+      .then(setData)
+      .catch((err) => { console.error(err); setError(String(err.message || err)); });
   }, []);
 
+  // Report the failure rather than showing 'Loading...' forever.
+  if (error) return <div style={{ color: 'var(--danger, #f87171)', padding: '2rem' }}>Could not load analysis: {error}</div>;
   if (!data) return <div style={{ color: 'var(--text3)', padding: '2rem' }}>Loading analysis...</div>;
 
   return (

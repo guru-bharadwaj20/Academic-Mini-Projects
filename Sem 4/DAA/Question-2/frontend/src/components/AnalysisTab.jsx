@@ -178,8 +178,8 @@ export default function AnalysisTab({ api }) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${api}/analysis`).then(r => r.json()),
-      fetch(`${api}/all-pairs`).then(r => r.json()),
+      fetch(`${api}/analysis`).then((r) => { if (!r.ok) throw new Error(`analysis: HTTP ${r.status}`); return r.json(); }),
+      fetch(`${api}/all-pairs`).then((r) => { if (!r.ok) throw new Error(`all-pairs: HTTP ${r.status}`); return r.json(); }),
     ]).then(([a, m]) => {
       setAnalysis(a);
       setMatrix(m);
