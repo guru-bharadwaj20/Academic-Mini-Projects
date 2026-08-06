@@ -5,7 +5,13 @@ import GraphTab from "./components/GraphTab";
 import AnalysisTab from "./components/AnalysisTab";
 import AlgorithmTab from "./components/AlgorithmTab";
 
-const API = "http://localhost:5000/api";
+// Relative, so requests go through the Vite dev proxy configured in
+// vite.config.js. This was an absolute "http://localhost:5000/api", which
+// bypassed that proxy entirely: the proxy block was dead configuration, every
+// call was cross-origin, and the app only worked because the backend enabled
+// permissive CORS. It also hardcoded the port, so the app broke whenever the
+// backend was started anywhere else.
+const API = "/api";
 
 const pulse = keyframes`
   0%, 100% { opacity: 1; }
